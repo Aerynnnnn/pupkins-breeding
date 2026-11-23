@@ -164,6 +164,18 @@ footer p { margin: 4px 0; }
 .true { font-size: 12px; color: var(--good); }
 .rowbtn { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .rowbtn:hover { border-color: var(--accent); }
+.pic { position: relative; display: inline-grid; place-items: center; flex: none; border-radius: 14px; overflow: hidden;
+  background: radial-gradient(circle at 50% 60%, color-mix(in srgb, var(--c) 30%, var(--surface)), color-mix(in srgb, var(--c) 10%, var(--surface)) 70%); }
+.pic img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.pic:not(:has(img))::after { content: attr(data-dog); font: 600 12px var(--f-display); color: var(--muted); text-align: center; padding: 4px; }
+.pic.lg { width: 128px; height: 128px; }
+.pic.md { width: 104px; height: 104px; }
+.pic.sm { width: 38px; height: 38px; border-radius: 9px; }
+.pic.sm:not(:has(img))::after { content: ""; }
+.pupTop { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.pupInfo { display: grid; gap: 8px; min-width: 0; flex: 1; }
+.pupTop > .facts { min-width: 0; flex: 1; align-content: center; }
+.withpic { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .syncstate { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
 .syncstate.on { color: var(--good); }
 .syncstate.on::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
@@ -398,6 +410,13 @@ function clsChip(c) {
   const k = CLASSES[c] || { name: "Class " + c, dog: "", color: "#A8A1B3" };
   return `<span class="cls" style="background:${k.color}"><i></i>${esc(k.name)} · ${esc(k.dog)}</span>`;
 }
+// The Pupkin's picture from the portal. Where it can't load (the claude.ai copy blocks outside images) the tinted box shows the breed instead.
+function picUrl(P) { return !P.im ? null : P.im.startsWith("https://") ? P.im : `https://storage.googleapis.com/ga-prd-ai-pupkins-stills/stills/production/4663/${P.id}/${P.im}.png`; }
+function pic(P, size) {
+  const c = CLASSES[P.c] || { color: "#A8A1B3", dog: "" }, u = picUrl(P);
+  return `<span class="pic ${size}" style="--c:${c.color}" data-dog="${esc(c.dog)}">${u ? `<img src="${esc(u)}" alt="Pupkin ${tag(P.id)}" loading="lazy" decoding="async">` : ""}</span>`;
+}
+document.addEventListener("error", e => { const t = e.target; if (t && t.tagName === "IMG" && t.parentElement && t.parentElement.classList.contains("pic")) t.remove(); }, true);
 function geneHtml(i, rec) {
   const c = CLASSES[partCls(i)];
   return `<span class="gene${rec ? " r" : ""}"><b style="background:${c ? c.color : "#A8A1B3"}"></b>${esc(partName(i))}</span>`;
@@ -414,6 +433,7 @@ function renderCard(which) {
       <span class="idbox"><label for="id${L}" class="muted">#</label><input id="id${L}" inputmode="numeric" value="${P.id}" list="ids" aria-label="Parent ${L} number"></span>
       ${clsChip(P.c)}
     </div>
+    <div class="pupTop">${pic(P, "lg")}
     <div class="facts">
       <span class="pill">Gen <span class="num">${P.gen}</span></span>
       <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
@@ -421,7 +441,7 @@ function renderCard(which) {
       ${price}
       ${P.one ? `<span class="pill warn">1 of 1 · ${esc(P.one)}</span>` : ""}
       ${who(P) ? `<span class="pill">Owner ${esc(who(P))}</span>` : ""}
-    </div>
+    </div></div>
     <div class="tablewrap"><table class="genes"><thead><tr><th>Slot</th><th>Shown (D)</th><th>R1</th><th>R2</th></tr></thead><tbody>${rows}</tbody></table></div>
     <a class="portal" href="https://portal.pupkins.gg/pupkins/${P.id}" target="_blank" rel="noopener">Open ${tag(P.id)} on the portal ↗</a>`;
   const inp = $("id" + L);
@@ -483,7 +503,7 @@ function renderFinder() {
   if (!top.length) { el.innerHTML = `<tbody><tr><td class="empty">No Pupkin ${S.scope === "listed" ? "for sale " : ""}can breed with ${tag(A.id)} right now.${S.scope === "listed" ? " Try Everyone." : ""}</td></tr></tbody>`; return; }
   el.innerHTML = `<thead><tr><th>Partner</th><th>Class</th><th class="r">Shows every target</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th class="r">Price</th><th>Owner</th></tr></thead><tbody>` +
     top.map(({ B, p, pur }) => `<tr class="pick" data-id="${B.id}" tabindex="0" title="Use as parent B">
-      <td class="num">${tag(B.id)}${B.one ? ` <span class="pill warn">1 of 1</span>` : ""}</td>
+      <td class="num"><span class="withpic">${pic(B, "sm")}${tag(B.id)}</span>${B.one ? ` <span class="pill warn">1 of 1</span>` : ""}</td>
       <td>${clsChip(B.c)}</td>
       <td class="r num">${anyT ? pct(p) : "–"}</td>
       <td class="r num">${pur.toFixed(2)}</td>
@@ -714,7 +734,7 @@ function renderMine() {
   const stateCell = (A, B) => { const ns = [A, B].map(statusOf).filter(s => s[1] !== "ok"); return ns.length ? `<span class="state note">${ns.map(s => esc(s[0])).join("; ")}</span>` : `<span class="state ok">Both ready</span>`; };
   $("sugTable").innerHTML = pairs.length ? `<thead><tr><th>Pair</th><th>Classes</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th>Status</th><th></th></tr></thead><tbody>` +
     pairs.slice(0, 15).map(({ A, B, p, pur, cost }) => `<tr>
-      <td class="num">${tag(A.id)} + ${tag(B.id)}</td>
+      <td class="num"><span class="withpic">${pic(A, "sm")}${tag(A.id)} + ${pic(B, "sm")}${tag(B.id)}</span></td>
       <td>${clsChip(A.c)}${A.c !== B.c ? " " + clsChip(B.c) : ""}</td>
       <td class="r num">${p == null ? "–" : pct(p)}</td>
       <td class="r num">${pur.toFixed(2)}</td>
@@ -740,7 +760,7 @@ function renderMine() {
   buys.sort((x, y) => y.v - x.v);
   $("buyTable").innerHTML = buys.length ? `<thead><tr><th>Your Pupkin</th><th>Buy</th><th>Class</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Price</th><th></th></tr></thead><tbody>` +
     buys.slice(0, 10).map(({ A, B, p, pur }) => `<tr>
-      <td class="num">${tag(A.id)}</td><td class="num">${tag(B.id)}</td><td>${clsChip(B.c)}</td>
+      <td class="num"><span class="withpic">${pic(A, "sm")}${tag(A.id)}</span></td><td class="num"><span class="withpic">${pic(B, "sm")}${tag(B.id)}</span></td><td>${clsChip(B.c)}</td>
       <td class="r num">${p == null ? "–" : pct(p)}</td><td class="r num">${pur.toFixed(2)}</td>
       <td class="r num">${B.eth} ETH</td>
       <td><button class="rowbtn" type="button" data-open="${A.id}:${B.id}">Open in calculator</button></td></tr>`).join("") + "</tbody>"
@@ -756,13 +776,14 @@ function renderMine() {
     const trueSlots = SLOTS.filter((_, s) => { const i = P.g[s * 3]; return M.pins[s].includes(i) && P.g[s * 3 + 1] === i && P.g[s * 3 + 2] === i; });
     const rows = SLOTS.map((n, s) => `<tr><td class="slotname">${n}</td><td>${geneBtn(P, s, 0)}</td><td>${geneBtn(P, s, 1)}</td><td>${geneBtn(P, s, 2)}</td></tr>`).join("");
     return `<article class="pup">
+      <div class="pupTop">${pic(P, "md")}<div class="pupInfo">
       <div class="head"><span class="id">${tag(P.id)}</span>${clsChip(P.c)}${P.one ? `<span class="pill warn">1 of 1 · ${esc(P.one)}</span>` : ""}</div>
+      <span class="state ${st[1]}">${esc(st[0])}</span>
       <div class="facts">
-        <span class="state ${st[1]}">${esc(st[0])}</span>
         <span class="pill">Gen <span class="num">${P.gen}</span></span>
         <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
         ${P.h < MAX_HATCH && !P.o ? `<span class="pill">Next <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>` : ""}
-      </div>
+      </div></div></div>
       ${ps != null ? `<div class="strength"><div class="label">Passes pinned parts ${Math.round(ps * 100)}%</div><div class="meter"><i style="width:${ps * 100}%"></i></div></div>` : ""}
       ${trueSlots.length ? `<div class="true">Breeds true for pinned ${trueSlots.join(", ")}</div>` : ""}
       <div class="tablewrap"><table class="genes"><thead><tr><th>Slot</th><th>Shown (D)</th><th>R1</th><th>R2</th></tr></thead><tbody>${rows}</tbody></table></div>
