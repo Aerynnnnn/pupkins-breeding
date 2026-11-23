@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<meta charset="utf-8">
+<title>Pupkins Breeder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: a breeding bench. Two parent cards side by side, the child's odds below them, then a partner finder table. */
+:root {
+  --bg: #f4f3fa; --surface: #ffffff; --sunk: #ebe9f5; --line: #dcd9ea;
+  --ink: #1e1b2e; --muted: #67637c; --accent: #5f5ce8; --accent-ink: #ffffff;
+  --good: #23864a; --warn: #b26a00; --bad: #c2352b;
+  --chip-ink: #1e1b2e;
+  --f-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
+  --f-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13121a; --surface: #1c1a26; --sunk: #24222f; --line: #34314a;
+  --ink: #edebf6; --muted: #a29eb8; --accent: #8c89ff; --accent-ink: #13121a;
+  --good: #4cc47a; --warn: #f0a63a; --bad: #ff6b5e; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13121a; --surface: #1c1a26; --sunk: #24222f; --line: #34314a;
+  --ink: #edebf6; --muted: #a29eb8; --accent: #8c89ff; --accent-ink: #13121a;
+  --good: #4cc47a; --warn: #f0a63a; --bad: #ff6b5e; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; }
+h1 { font-size: 30px; letter-spacing: -0.01em; }
+h2 { font-size: 20px; }
+h3 { font-size: 15px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 62ch; }
+.snap { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  background: var(--sunk); font-size: 12px; white-space: nowrap; }
+.pill.warn { color: var(--warn); }
+
+details.odds { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+details.odds summary { cursor: pointer; font-weight: 600; }
+details.odds .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin-top: 10px; }
+details.odds label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+details.odds input { width: 90px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); }
+details.odds p { margin: 10px 0 0; color: var(--muted); max-width: 70ch; }
+
+.parents { display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: stretch; }
+.heart { align-self: center; font-family: var(--f-display); font-size: 28px; color: var(--accent); }
+@media (max-width: 760px) { .parents { grid-template-columns: 1fr; } .heart { justify-self: center; } }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.card .head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.idbox { display: flex; align-items: center; gap: 6px; }
+.idbox input { width: 96px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-family: var(--f-num); font-size: 16px; }
+.cls { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 999px; color: var(--chip-ink); font-weight: 600; font-size: 12px; }
+.cls i { width: 16px; height: 16px; border-radius: 50%; background: rgba(255,255,255,.55); display: inline-block; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.portal { font-size: 12px; color: var(--accent); }
+
+.genes { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.genes th { text-align: left; font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 0 6px 6px 0; }
+.genes td { padding: 3px 6px 3px 0; vertical-align: top; }
+.gene { display: inline-flex; align-items: center; gap: 5px; line-height: 1.25; }
+.gene b { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.gene.r { color: var(--muted); }
+.slotname { color: var(--muted); white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+
+.rules { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.rule { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.rule.ok::before { content: "âœ“"; color: var(--good); font-weight: 700; }
+.rule.no::before { content: "âœ•"; color: var(--bad); font-weight: 700; }
+.rule.no { color: var(--bad); }
+.rule.note::before { content: "!"; color: var(--warn); font-weight: 700; }
+.cost { margin-left: auto; text-align: right; }
+.cost .big { font-family: var(--f-num); font-size: 20px; }
+
+.child { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 16px; }
+.child .sum { display: flex; flex-wrap: wrap; gap: 24px; align-items: end; }
+.stat .v { font-family: var(--f-num); font-size: 26px; line-height: 1.1; }
+.stat .s { font-size: 12px; color: var(--muted); }
+.classbar { display: flex; height: 26px; border-radius: 8px; overflow: hidden; min-width: 220px; flex: 1; max-width: 420px; }
+.classbar span { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--chip-ink); }
+
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.slot { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; min-width: 0; }
+.slot .t { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.opt { position: relative; display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; width: 100%;
+  border: 1px solid transparent; border-radius: 8px; background: none; padding: 4px 8px; cursor: pointer; text-align: left; overflow: hidden; }
+.opt:hover { border-color: var(--line); }
+.opt .bar { position: absolute; inset: 0 auto 0 0; opacity: .22; border-radius: 8px; pointer-events: none; }
+.opt > span { position: relative; min-width: 0; }
+.opt.tgt { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.opt.tgt .name::after { content: " Â· target"; color: var(--accent); font-weight: 600; font-size: 11px; }
+.slot .pure { font-size: 11.5px; color: var(--muted); }
+
+.finder { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; }
+.targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.targets label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.targets select { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-width: 0; width: 100%; }
+.bar-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.seg button { border: 0; background: none; padding: 6px 14px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.btn { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+table.list { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+table.list th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.list td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.list tr.pick { cursor: pointer; }
+table.list tr.pick:hover td { background: var(--sunk); }
+table.list .r { text-align: right; }
+.empty { padding: 20px; text-align: center; color: var(--muted); }
+footer { color: var(--muted); font-size: 12px; max-width: 80ch; }
+footer p { margin: 4px 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Pupkins Breeder</h1>
+      <p>Pick two Pupkins to see what their child can be, what the hatch costs, and which partner gives you the best shot at the parts you want.</p>
+    </div>
+    <div class="snap" id="snap"><span class="pill">Loading Pupkinsâ€¦</span></div>
+  </header>
+
+  <details class="odds" id="oddsBox">
+    <summary>Inheritance odds (per parent, per part)</summary>
+    <div class="row">
+      <label for="wD">Shown part (D) %<input id="wD" type="number" step="0.125" min="0" value="37.5"></label>
+      <label for="wR1">Hidden R1 %<input id="wR1" type="number" step="0.125" min="0" value="9.375"></label>
+      <label for="wR2">Hidden R2 %<input id="wR2" type="number" step="0.125" min="0" value="3.125"></label>
+      <button class="btn" id="oddsReset" type="button">Axie defaults</button>
+    </div>
+    <p>Pupkins hasn't published its odds. These defaults are Axie's: each part comes from one parent's D, R1 or R2 at 37.5 / 9.375 / 3.125%, and the class is a 50/50 pick. If you enter other numbers, they're scaled so each parent counts for half.</p>
+  </details>
+
+  <section class="parents" aria-label="Parents">
+    <div class="card" id="cardA"></div>
+    <div class="heart" aria-hidden="true">+</div>
+    <div class="card" id="cardB"></div>
+  </section>
+
+  <section class="card" aria-label="Can they breed">
+    <div class="rules" id="rules"></div>
+  </section>
+
+  <section class="child" aria-labelledby="childH">
+    <div class="sum">
+      <div class="stat"><div class="label">Child</div><h2 id="childH">Possible child</h2></div>
+      <div class="stat" style="flex:1;min-width:220px"><div class="label">Class</div><div class="classbar" id="classbar"></div></div>
+      <div class="stat"><div class="label">Shows every target</div><div class="v" id="tgtP">â€“</div><div class="s" id="tgtS"></div></div>
+      <div class="stat"><div class="label">Expected purity</div><div class="v" id="purity">â€“</div><div class="s">of 6 parts</div></div>
+    </div>
+    <div class="slots" id="slots"></div>
+    <p class="muted" style="margin:0">Click a part to make it a target (click again to clear). "Pure gene" is the chance all three of the child's genes in that slot are the target part, so it breeds true.</p>
+  </section>
+
+  <section class="finder" aria-labelledby="findH">
+    <div class="bar-row" style="justify-content:space-between">
+      <h2 id="findH">Best partner for <span id="findFor">#â€”</span></h2>
+      <div class="bar-row">
+        <div class="seg" role="group" aria-label="Who to search">
+          <button type="button" id="scopeListed" aria-pressed="true">For sale</button>
+          <button type="button" id="scopeAll" aria-pressed="false">Everyone</button>
+        </div>
+        <div class="seg" role="group" aria-label="Sort partners">
+          <button type="button" id="sortValue" aria-pressed="true">Best value</button>
+          <button type="button" id="sortOdds" aria-pressed="false">Best odds</button>
+        </div>
+        <button class="btn" type="button" id="tgtFromA">Target parent A's look</button>
+        <button class="btn" type="button" id="tgtClear">Clear targets</button>
+      </div>
+    </div>
+    <div class="targets" id="targets"></div>
+    <div class="tablewrap"><table class="list" id="finder"></table></div>
+  </section>
+
+  <footer>
+    <p>The rules come from the portal's own code: 7 hatches max, no breeding with a parent, child or sibling, Origins can't breed, and each parent pays SCHIFFY by how many times it has hatched (900, 1,350, 2,250, 3,600, 5,850, 9,450, 15,300).</p>
+    <p>The data is a snapshot of the Pupkins portal's market and goes out of date as people trade. Check the price on the portal before you buy. This page only reads data and never touches a wallet.</p>
+  </footer>
+</div>
+
+<script>
+const CLASSES = [
+  { name: "Guardian", dog: "Akita", color: "#6F6CF5" },
+  { name: "Enforcer", dog: "Doberman", color: "#18AEDB" },
+  { name: "Adventurer", dog: "Schiffy", color: "#FFB224" },
+  { name: "Trickster", dog: "Dachshund", color: "#FF6436" },
+  { name: "Oracle", dog: "Maltese", color: "#F25CB8" },
+  { name: "Hunter", dog: "Chihuahua", color: "#74D12F" },
+];
+const SLOTS = ["Face", "Ears", "Hand", "Head", "Back", "Tail"];
+const COST = [900, 1350, 2250, 3600, 5850, 9450, 15300];
+const MAX_HATCH = 7;
+const DEFAULT_W = [37.5, 9.375, 3.125];
+
+let DATA = null, BYID = new Map(), PARTS = [];
+const S = { a: null, b: null, targets: [null, null, null, null, null, null], scope: "listed", sort: "value", w: DEFAULT_W.slice() };
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tag = id => "#" + String(id).padStart(4, "0");
+const pct = p => p >= 0.9995 ? "100%" : p >= 0.1 ? (p * 100).toFixed(1) + "%" : p >= 0.001 ? (p * 100).toFixed(2) + "%" : p > 0 ? (p * 100).toFixed(3) + "%" : "0%";
+const oneIn = p => p > 0 ? "about 1 in " + (1 / p < 10 ? (1 / p).toFixed(1) : Math.round(1 / p).toLocaleString()) : "can't happen";
+const fmt = n => n.toLocaleString();
+const parentCost = h => COST[Math.min(h, MAX_HATCH - 1)];
+const partName = i => PARTS[i][2];
+const partCls = i => PARTS[i][1];
+
+/* ---------- breeding math (pure functions) ---------- */
+function weights() {
+  const t = S.w[0] + S.w[1] + S.w[2];
+  return t > 0 ? S.w.map(x => x / t / 2) : DEFAULT_W.map(x => x / 100);
+}
+// Chance of each part showing in one slot of the child.
+function slotDist(A, B, s, w) {
+  const m = new Map();
+  for (const p of [A, B]) for (let k = 0; k < 3; k++) {
+    const i = p.g[s * 3 + k];
+    m.set(i, (m.get(i) || 0) + w[k]);
+  }
+  return [...m.entries()].sort((x, y) => y[1] - x[1]);
+}
+function slotP(A, B, s, part, w) {
+  let p = 0;
+  for (const q of [A, B]) for (let k = 0; k < 3; k++) if (q.g[s * 3 + k] === part) p += w[k];
+  return p;
+}
+function targetP(A, B, targets, w) {
+  let p = 1;
+  for (let s = 0; s < 6; s++) if (targets[s] != null) p *= slotP(A, B, s, targets[s], w);
+  return p;
+}
+function classOdds(A, B) {
+  const m = new Map(); m.set(A.c, 0.5); m.set(B.c, (m.get(B.c) || 0) + 0.5); return m;
+}
+// Expected number of shown parts whose class matches the child's class.
+function expPurity(A, B, w) {
+  let e = 0;
+  for (const [c, pc] of classOdds(A, B)) for (let s = 0; s < 6; s++)
+    for (const [i, p] of slotDist(A, B, s, w)) if (partCls(i) === c) e += pc * p;
+  return e;
+}
+// Blocking rules, same as the portal's (self, family, origin, sterile); resting and listed are notes.
+function checks(A, B, now = Date.now()) {
+  const out = [];
+  const fam = (x, y) => (x.par || []).includes(y.id);
+  out.push({ ok: A.id !== B.id, label: "Two different Pupkins" });
+  out.push({ ok: !fam(A, B) && !fam(B, A), label: "Not parent and child" });
+  out.push({ ok: !(A.par && B.par && A.par.some(p => B.par.includes(p))), label: "Not siblings" });
+  out.push({ ok: !A.o && !B.o, label: "Neither is an Origin" });
+  out.push({ ok: A.h < MAX_HATCH && B.h < MAX_HATCH, label: "Hatches left" });
+  for (const p of [A, B]) {
+    if (p.cd && Date.parse(p.cd) > now) out.push({ note: true, label: tag(p.id) + " rests until " + new Date(p.cd).toLocaleString() });
+    if (p.st === "listed") out.push({ note: true, label: tag(p.id) + " is for sale: buy it (or unlist it) first" });
+    if (p.st === "lent" || p.st === "borrowed") out.push({ note: true, label: tag(p.id) + " is " + p.st });
+  }
+  return out;
+}
+const canPair = (A, B) => checks(A, B).every(c => c.note || c.ok);
+
+/* ---------- rendering ---------- */
+function clsChip(c) {
+  const k = CLASSES[c] || { name: "Class " + c, dog: "", color: "#A8A1B3" };
+  return `<span class="cls" style="background:${k.color}"><i></i>${esc(k.name)} Â· ${esc(k.dog)}</span>`;
+}
+function geneHtml(i, rec) {
+  const c = CLASSES[partCls(i)];
+  return `<span class="gene${rec ? " r" : ""}"><b style="background:${c ? c.color : "#A8A1B3"}"></b>${esc(partName(i))}</span>`;
+}
+function renderCard(which) {
+  const P = S[which], el = $(which === "a" ? "cardA" : "cardB");
+  const L = which.toUpperCase();
+  if (!P) { el.innerHTML = `<div class="head"><h3>Parent ${L}</h3></div><p class="muted">Enter a Pupkin number.</p>`; return; }
+  const price = P.eth != null ? `<span class="pill">For sale Â· <span class="num">${P.eth} ETH</span></span>` : `<span class="pill">Not for sale</span>`;
+  const rows = SLOTS.map((n, s) => `<tr><td class="slotname">${n}</td><td>${geneHtml(P.g[s * 3])}</td><td>${geneHtml(P.g[s * 3 + 1], 1)}</td><td>${geneHtml(P.g[s * 3 + 2], 1)}</td></tr>`).join("");
+  el.innerHTML = `
+    <div class="head">
+      <span class="label">Parent ${L}</span>
+      <span class="idbox"><label for="id${L}" class="muted">#</label><input id="id${L}" inputmode="numeric" value="${P.id}" list="ids" aria-label="Parent ${L} number"></span>
+      ${clsChip(P.c)}
+    </div>
+    <div class="facts">
+      <span class="pill">Gen <span class="num">${P.gen}</span></span>
+      <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
+      <span class="pill">Next hatch <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>
+      ${price}
+      ${P.one ? `<span class="pill warn">1 of 1 Â· ${esc(P.one)}</span>` : ""}
+      ${P.who ? `<span class="pill">Owner ${esc(P.who)}</span>` : ""}
+    </div>
+    <div class="tablewrap"><table class="genes"><thead><tr><th>Slot</th><th>Shown (D)</th><th>R1</th><th>R2</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <a class="portal" href="https://portal.pupkins.gg/pupkins/${P.id}" target="_blank" rel="noopener">Open ${tag(P.id)} on the portal â†—</a>`;
+  const inp = $("id" + L);
+  inp.addEventListener("change", () => setParent(which, inp.value));
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") setParent(which, inp.value); });
+}
+function renderRules() {
+  const A = S.a, B = S.b, el = $("rules");
+  if (!A || !B) { el.innerHTML = `<span class="muted">Pick both parents.</span>`; return; }
+  const cs = checks(A, B);
+  const total = parentCost(A.h) + parentCost(B.h);
+  const buy = [A, B].filter(p => p.eth != null).reduce((t, p) => t + p.eth, 0);
+  el.innerHTML = cs.map(c => `<span class="rule ${c.note ? "note" : c.ok ? "ok" : "no"}">${esc(c.label)}</span>`).join("") +
+    `<div class="cost"><div class="label">This hatch costs</div><div class="big">${fmt(total)} SCHIFFY</div>
+     <div class="muted" style="font-size:12px">${fmt(parentCost(A.h))} + ${fmt(parentCost(B.h))}${buy ? ` Â· buying both listed: ${+buy.toFixed(4)} ETH (~$${fmt(Math.round(buy * DATA.ethUsd))})` : ""}</div></div>`;
+}
+function renderChild() {
+  const A = S.a, B = S.b, w = weights();
+  if (!A || !B) { $("slots").innerHTML = ""; $("classbar").innerHTML = ""; return; }
+  $("classbar").innerHTML = [...classOdds(A, B)].map(([c, p]) =>
+    `<span style="width:${p * 100}%;background:${CLASSES[c].color}">${esc(CLASSES[c].name)} ${Math.round(p * 100)}%</span>`).join("");
+  const tp = targetP(A, B, S.targets, w), anyT = S.targets.some(t => t != null);
+  $("tgtP").textContent = anyT ? pct(tp) : "â€“";
+  $("tgtS").textContent = anyT ? oneIn(tp) + " hatches" : "set a target below";
+  $("purity").textContent = expPurity(A, B, w).toFixed(2);
+  $("slots").innerHTML = SLOTS.map((n, s) => {
+    const d = slotDist(A, B, s, w), t = S.targets[s];
+    const pt = t != null ? slotP(A, B, s, t, w) : null;
+    const opts = d.map(([i, p]) => {
+      const c = CLASSES[partCls(i)];
+      return `<button type="button" class="opt${t === i ? " tgt" : ""}" data-s="${s}" data-i="${i}" aria-pressed="${t === i}">
+        <span class="bar" style="width:${p * 100}%;background:${c.color}"></span>
+        <span class="name">${geneHtml(i)}</span><span class="num">${pct(p)}</span></button>`;
+    }).join("");
+    return `<div class="slot"><div class="t"><h3>${n}</h3>${t != null ? `<span class="label">target ${pct(pt)}</span>` : ""}</div>${opts}
+      ${t != null ? `<div class="pure">Pure gene (D, R1 and R2 all ${esc(partName(t))}): ${pct(pt ** 3)}</div>` : ""}</div>`;
+  }).join("");
+}
+function renderTargets() {
+  const el = $("targets");
+  el.innerHTML = SLOTS.map((n, s) => {
+    const opts = CLASSES.map((c, ci) => {
+      const ps = PARTS.map((p, i) => [p, i]).filter(([p]) => p[0] === s && p[1] === ci).sort((x, y) => x[0][2].localeCompare(y[0][2]));
+      return `<optgroup label="${esc(c.name)}">${ps.map(([p, i]) => `<option value="${i}"${S.targets[s] === i ? " selected" : ""}>${esc(p[2])}</option>`).join("")}</optgroup>`;
+    }).join("");
+    return `<label for="t${s}">${n}<select id="t${s}" data-s="${s}"><option value="">Any</option>${opts}</select></label>`;
+  }).join("");
+}
+function renderFinder() {
+  const A = S.a, el = $("finder");
+  $("findFor").textContent = A ? tag(A.id) : "#â€”";
+  if (!A) { el.innerHTML = ""; return; }
+  const w = weights(), anyT = S.targets.some(t => t != null);
+  let rows = DATA.pupkins.filter(B => B.id !== A.id && (S.scope === "all" || B.eth != null) && canPair(A, B));
+  rows = rows.map(B => { const p = anyT ? targetP(A, B, S.targets, w) : 1; return { B, p, pur: expPurity(A, B, w), v: B.eth ? p / B.eth : -1 }; });
+  const byOdds = (x, y) => y.p - x.p || y.pur - x.pur || (x.B.eth ?? 1e9) - (y.B.eth ?? 1e9) || x.B.h - y.B.h;
+  rows.sort(S.sort === "value" ? (x, y) => y.v - x.v || byOdds(x, y) : byOdds);
+  const top = rows.slice(0, 60);
+  if (!top.length) { el.innerHTML = `<tbody><tr><td class="empty">No Pupkin ${S.scope === "listed" ? "for sale " : ""}can breed with ${tag(A.id)} right now.${S.scope === "listed" ? " Try Everyone." : ""}</td></tr></tbody>`; return; }
+  el.innerHTML = `<thead><tr><th>Partner</th><th>Class</th><th class="r">Shows every target</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th class="r">Price</th><th>Owner</th></tr></thead><tbody>` +
+    top.map(({ B, p, pur }) => `<tr class="pick" data-id="${B.id}" tabindex="0" title="Use as parent B">
+      <td class="num">${tag(B.id)}${B.one ? ` <span class="pill warn">1 of 1</span>` : ""}</td>
+      <td>${clsChip(B.c)}</td>
+      <td class="r num">${anyT ? pct(p) : "â€“"}</td>
+      <td class="r num">${pur.toFixed(2)}</td>
+      <td class="r num">${fmt(parentCost(A.h) + parentCost(B.h))}</td>
+      <td class="r num">${B.eth != null ? B.eth + " ETH" : "â€“"}</td>
+      <td>${esc(B.who || "")}</td></tr>`).join("") +
+    `</tbody><tfoot><tr><td colspan="7" class="muted" style="padding-top:8px">Showing ${top.length} of ${fmt(rows.length)} Pupkins that can breed with ${tag(A.id)}${S.sort === "value" ? ", most target odds per ETH first (not for sale go last)" : ", best target odds first"}. Click a row to use it as parent B.</td></tr></tfoot>`;
+}
+function renderAll() { renderCard("a"); renderCard("b"); renderRules(); renderChild(); renderTargets(); renderFinder(); saveHash(); }
+
+/* ---------- state ---------- */
+function setParent(which, v) {
+  const P = BYID.get(parseInt(String(v).replace(/\D/g, ""), 10));
+  if (!P) { const inp = $("id" + which.toUpperCase()); if (inp) { inp.setCustomValidity("No Pupkin with that number"); inp.reportValidity(); } return; }
+  S[which] = P;
+  if (which === "a") targetsFromA();
+  renderAll();
+}
+function targetsFromA() { S.targets = S.a ? SLOTS.map((_, s) => S.a.g[s * 3]) : [null, null, null, null, null, null]; }
+function saveHash() {
+  if (!S.a || !S.b) return;
+  const h = "#a" + S.a.id + "-b" + S.b.id;
+  if (location.hash !== h) try { history.replaceState(null, "", h); } catch (e) {}
+}
+function bestPartner(A) {
+  const w = weights();
+  let best = null, bp = -1;
+  for (const B of DATA.pupkins) {
+    if (B.id === A.id || B.eth == null || !canPair(A, B)) continue;
+    const p = targetP(A, B, S.targets, w) / B.eth;   // best target odds per ETH
+    if (p > bp) { bp = p; best = B; }
+  }
+  return best || DATA.pupkins.find(B => B.id !== A.id);
+}
+
+document.addEventListener("click", e => {
+  const o = e.target.closest(".opt");
+  if (o) { const s = +o.dataset.s, i = +o.dataset.i; S.targets[s] = S.targets[s] === i ? null : i; renderAll(); return; }
+  const r = e.target.closest("tr.pick");
+  if (r) { S.b = BYID.get(+r.dataset.id); renderAll(); $("cardB").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+});
+document.addEventListener("keydown", e => {
+  const r = e.target.closest && e.target.closest("tr.pick");
+  if (r && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); S.b = BYID.get(+r.dataset.id); renderAll(); }
+});
+document.addEventListener("change", e => {
+  if (e.target.matches(".targets select")) { const s = +e.target.dataset.s; S.targets[s] = e.target.value === "" ? null : +e.target.value; renderAll(); }
+});
+function setScope(sc) { S.scope = sc; $("scopeListed").setAttribute("aria-pressed", sc === "listed"); $("scopeAll").setAttribute("aria-pressed", sc === "all"); renderFinder(); }
+function setSort(so) { S.sort = so; $("sortValue").setAttribute("aria-pressed", so === "value"); $("sortOdds").setAttribute("aria-pressed", so === "odds"); renderFinder(); }
+$("sortValue").onclick = () => setSort("value");
+$("sortOdds").onclick = () => setSort("odds");
+$("scopeListed").onclick = () => setScope("listed");
+$("scopeAll").onclick = () => setScope("all");
+$("tgtFromA").onclick = () => { targetsFromA(); renderAll(); };
+$("tgtClear").onclick = () => { S.targets = [null, null, null, null, null, null]; renderAll(); };
+for (const [k, id] of [[0, "wD"], [1, "wR1"], [2, "wR2"]]) $(id).addEventListener("input", () => { S.w[k] = Math.max(0, parseFloat($(id).value) || 0); renderChild(); renderFinder(); });
+$("oddsReset").onclick = () => { S.w = DEFAULT_W.slice(); $("wD").value = 37.5; $("wR1").value = 9.375; $("wR2").value = 3.125; renderChild(); renderFinder(); };
+
+/* ---------- load ---------- */
+fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
+  DATA = d; PARTS = d.parts; d.pupkins.forEach(p => BYID.set(p.id, p));
+  const bred = d.pupkins.filter(p => p.h > 0).length, listed = d.pupkins.filter(p => p.eth != null).length;
+  const age = new Date(d.asOf);
+  $("snap").innerHTML = `<span class="pill">Snapshot ${age.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
+    <span class="pill"><span class="num">${fmt(d.pupkins.length)}</span> Pupkins Â· <span class="num">${listed}</span> for sale</span>
+    <span class="pill${bred ? "" : " warn"}">${bred ? fmt(bred) + " have bred" : "No hatches yet"}</span>`;
+  const dl = document.createElement("datalist"); dl.id = "ids";
+  dl.innerHTML = d.pupkins.map(p => `<option value="${p.id}">${CLASSES[p.c].name}${p.eth != null ? " Â· " + p.eth + " ETH" : ""}</option>`).join("");
+  document.body.appendChild(dl);
+  const m = /^#a(\d+)-b(\d+)$/.exec(location.hash);
+  const listedSorted = d.pupkins.filter(p => p.eth != null).sort((x, y) => x.eth - y.eth);
+  S.a = (m && BYID.get(+m[1])) || listedSorted[0] || d.pupkins[0];
+  targetsFromA();
+  S.b = (m && BYID.get(+m[2])) || bestPartner(S.a);
+  renderAll();
+}).catch(err => {
+  $("snap").innerHTML = `<span class="pill warn">Couldn't load the Pupkins data (pupkins.json). Run build.ps1 and publish again.</span>`;
+});
+</script>
