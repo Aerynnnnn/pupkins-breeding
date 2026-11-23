@@ -164,6 +164,11 @@ footer p { margin: 4px 0; }
 .true { font-size: 12px; color: var(--good); }
 .rowbtn { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: 12px; white-space: nowrap; }
 .rowbtn:hover { border-color: var(--accent); }
+.syncstate { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.syncstate.on { color: var(--good); }
+.syncstate.on::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--good); }
+.syncbox { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.syncbox input { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-family: var(--f-num); font-size: 12px; }
 .sectionhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -238,7 +243,7 @@ footer p { margin: 4px 0; }
 
   <div class="view" id="viewMine" hidden>
     <section class="card" aria-labelledby="walletH">
-      <div class="sectionhead"><h2 id="walletH">Your wallets</h2><span class="muted" style="font-size:12px">Saved in this browser only</span></div>
+      <div class="sectionhead"><h2 id="walletH">Your wallets</h2><span class="syncstate" id="syncState">Saved in this browser only</span></div>
       <form class="walletform" id="walletForm">
         <input id="walletIn" autocomplete="off" spellcheck="false" placeholder="Wallet address (0x…) or portal name" aria-label="Wallet address or portal name">
         <button class="btn primary" type="submit">Add wallet</button>
@@ -246,6 +251,13 @@ footer p { margin: 4px 0; }
       <div class="msg" id="walletMsg" hidden></div>
       <div class="chips" id="walletChips"></div>
       <div class="stats" id="mySum"></div>
+      <div class="syncbox" id="syncBox" hidden>
+        <div class="bar-row">
+          <button class="btn" type="button" id="syncCopy">Copy sync link</button>
+          <span class="muted" style="font-size:12px">Open it in another browser or device to add these wallets and pins there.</span>
+        </div>
+        <input id="syncLink" readonly aria-label="Sync link" hidden>
+      </div>
     </section>
 
     <div class="view" id="mineBody">
@@ -541,11 +553,77 @@ const who = p => (DATA && DATA.owners[p.w] || [])[1] || "";
 const addrOf = p => (DATA && DATA.owners[p.w] || [])[0] || "";
 const short = a => a.slice(0, 6) + "…" + a.slice(-4);
 const anyPins = () => M.pins.some(x => x.length);
-function savePrefs() { store.set("pb.wallets", M.wallets); store.set("pb.pins", M.pins); }
+// Pins are part indices into the (sorted, stable) parts table. "pb.pins2": the table was re-sorted on 2026-11-24, older pins are dropped.
+const cleanWallets = w => Array.isArray(w) ? [...new Set(w.filter(x => typeof x === "string" && /^0x[0-9a-f]{40}$/.test(x)))] : [];
+const cleanPins = p => Array.isArray(p) && p.length === 6
+  ? p.map((x, s) => Array.isArray(x) ? [...new Set(x.filter(i => Number.isInteger(i) && PARTS[i] && PARTS[i][0] === s))] : [])
+  : [[], [], [], [], [], []];
+const prefsJson = () => JSON.stringify({ wallets: M.wallets, pins: M.pins });
+function savePrefs() { store.set("pb.wallets", M.wallets); store.set("pb.pins2", M.pins); cloudSave(); }
 function loadPrefs() {
-  const w = store.get("pb.wallets", []), p = store.get("pb.pins", null);
-  M.wallets = Array.isArray(w) ? w.filter(x => /^0x[0-9a-f]{40}$/.test(x)) : [];
-  if (Array.isArray(p) && p.length === 6) M.pins = p.map((x, s) => Array.isArray(x) ? x.filter(i => PARTS[i] && PARTS[i][0] === s) : []);
+  M.wallets = cleanWallets(store.get("pb.wallets", []));
+  M.pins = cleanPins(store.get("pb.pins2", null));
+}
+function mergePrefs(wallets, pins) {
+  M.wallets = cleanWallets([...M.wallets, ...wallets]);
+  const p = cleanPins(pins); M.pins = M.pins.map((x, s) => [...new Set([...x, ...p[s]])]);
+}
+
+/* Sync, way 1: a private record on the viewer's claude.ai account (only on the claude.ai copy of this page). */
+const SYNC = { ref: null, on: false, writing: false, again: false };
+function showSync(text, on) { const el = $("syncState"); el.textContent = text; el.classList.toggle("on", !!on); }
+async function cloudSave() {
+  if (!SYNC.ref || !SYNC.on) return;
+  if (SYNC.writing) { SYNC.again = true; return; }
+  SYNC.writing = true;
+  try { await SYNC.ref.set({ wallets: M.wallets, pins: M.pins, updatedAt: new Date().toISOString() }); showSync("Synced to your claude.ai account", true); }
+  catch (e) { showSync(e && e.code === "invalid_argument" ? "Can't save to your account here; saved in this browser" : "Sync paused; saved in this browser", false); }
+  SYNC.writing = false;
+  if (SYNC.again) { SYNC.again = false; cloudSave(); }
+}
+async function startSync() {
+  if (!window.claude || typeof window.claude.use !== "function") return;
+  const db = await window.claude.use("db"); if (!db) return;
+  const user = await window.claude.use("user"); const uid = user && await user.id(); if (!uid) return;
+  SYNC.ref = db.doc("data/users/" + uid + "/prefs");
+  showSync("Connecting to your account…");
+  const slow = setTimeout(() => showSync("Can't reach your account yet; saved in this browser"), 10000);
+  let first = true;
+  SYNC.ref.onSnapshot(snap => {
+    if (snap.metadata.fromCache || snap.metadata.hasPendingWrites) return;
+    clearTimeout(slow);
+    const d = snap.exists ? snap.data() : null;
+    const before = prefsJson();
+    if (first) {   // first answer: keep what this browser had and add what the account has
+      first = false; SYNC.on = true;
+      if (d) mergePrefs(d.wallets || [], d.pins || null);
+      store.set("pb.wallets", M.wallets); store.set("pb.pins2", M.pins);
+      const remote = d ? JSON.stringify({ wallets: cleanWallets(d.wallets), pins: cleanPins(d.pins) }) : null;
+      if (prefsJson() !== remote && (M.wallets.length || anyPins() || d)) cloudSave(); else showSync("Synced to your claude.ai account", true);
+    } else if (d && !SYNC.writing && !SYNC.again) {   // later: another device changed it (ignored while our own save is in flight)
+      M.wallets = cleanWallets(d.wallets); M.pins = cleanPins(d.pins);
+      store.set("pb.wallets", M.wallets); store.set("pb.pins2", M.pins);
+      showSync("Synced to your claude.ai account", true);
+    }
+    if (prefsJson() !== before && !$("viewMine").hidden) renderMine();
+  }, () => { clearTimeout(slow); SYNC.on = false; showSync("Sync stopped; saved in this browser"); });
+}
+
+/* Sync, way 2: a link that carries wallets + pins (works anywhere, e.g. the public site). Format: #mine-w<40 hex>-…-p<slot><3-digit part> */
+const PUBLIC_URL = "https://aerynnnnn.github.io/pupkins-breeding/";
+function syncCode() {
+  const t = M.wallets.map(a => "w" + a.slice(2));
+  M.pins.forEach((x, s) => x.forEach(i => t.push("p" + s + String(i).padStart(3, "0"))));
+  return "mine-" + t.join("-");
+}
+function readSyncCode(hash) {
+  const m = /^#mine-(.+)$/.exec(hash); if (!m) return null;
+  const wallets = [], pins = [[], [], [], [], [], []];
+  for (const t of m[1].split("-")) {
+    if (/^w[0-9a-f]{40}$/i.test(t)) wallets.push("0x" + t.slice(1).toLowerCase());
+    else if (/^p[0-5]\d{3}$/.test(t)) pins[+t[1]].push(+t.slice(2));
+  }
+  return { wallets, pins };
 }
 function myPupkins() { const set = new Set(M.wallets); return DATA.pupkins.filter(p => set.has(addrOf(p))); }
 function statusOf(p, now = Date.now()) {
@@ -603,6 +681,7 @@ function renderMine() {
       <button class="btn" type="button" data-example="${ex[0]}">Try an example wallet (${esc(ex[1] || short(ex[0]))})</button>`;
   })();
   $("mineBody").hidden = !M.wallets.length;
+  $("syncBox").hidden = !M.wallets.length;
   if (!M.wallets.length) { $("mySum").innerHTML = ""; return; }
   const ready = mine.filter(p => statusOf(p)[1] === "ok").length;
   const left = mine.reduce((t, p) => t + (p.o ? 0 : MAX_HATCH - p.h), 0);
@@ -706,6 +785,13 @@ document.addEventListener("change", e => {
 });
 $("walletForm").addEventListener("submit", e => { e.preventDefault(); addWallet($("walletIn").value); });
 $("pinClear").onclick = () => { M.pins = [[], [], [], [], [], []]; savePrefs(); renderMine(); };
+$("syncCopy").onclick = () => {
+  const link = PUBLIC_URL + "#" + syncCode(), box = $("syncLink"), btn = $("syncCopy");
+  box.value = link; box.hidden = false;
+  const done = ok => { btn.textContent = ok ? "Copied" : "Copy the link below"; setTimeout(() => { btn.textContent = "Copy sync link"; }, 2500); };
+  try { navigator.clipboard.writeText(link).then(() => done(true), () => { box.select(); done(false); }); }
+  catch (e) { box.select(); done(false); }
+};
 function setMySort(so) { M.sort = so; for (const [id, v] of [["mySortPins", "pins"], ["mySortReady", "ready"], ["mySortId", "id"]]) $(id).setAttribute("aria-pressed", so === v); renderMine(); }
 $("mySortPins").onclick = () => setMySort("pins");
 $("mySortReady").onclick = () => setMySort("ready");
@@ -714,7 +800,15 @@ $("mySortId").onclick = () => setMySort("id");
 /* ---------- views ---------- */
 function route() {
   if (!DATA) return;
-  const mine = location.hash === "#mine";
+  const code = readSyncCode(location.hash);
+  if (code) {   // opened from a sync link: add its wallets and pins, then tidy the address
+    mergePrefs(code.wallets, code.pins); savePrefs();
+    try { history.replaceState(null, "", "#mine"); } catch (e) {}
+    const msg = $("walletMsg");
+    msg.textContent = `Added ${code.wallets.length} wallet${code.wallets.length === 1 ? "" : "s"} and ${code.pins.flat().length} pin${code.pins.flat().length === 1 ? "" : "s"} from your sync link.`;
+    msg.hidden = false;
+  }
+  const mine = location.hash.startsWith("#mine");
   $("viewCalc").hidden = mine; $("viewMine").hidden = !mine;
   $("tabCalc").setAttribute("aria-current", mine ? "false" : "page");
   $("tabMine").setAttribute("aria-current", mine ? "page" : "false");
@@ -747,6 +841,7 @@ fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r
   S.b = (m && BYID.get(+m[2])) || bestPartner(S.a);
   loadPrefs();
   route();
+  startSync().catch(() => {});
 }).catch(err => {
   $("snap").innerHTML = `<span class="pill warn">Couldn't load the Pupkins data (pupkins.json). Run build.ps1 and publish again.</span>`;
 });
