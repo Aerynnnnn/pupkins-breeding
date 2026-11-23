@@ -28,6 +28,7 @@
   --good: #4cc47a; --warn: #f0a63a; --bad: #ff6b5e; color-scheme: dark }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--bg); color: var(--ink); font: 14px/1.5 var(--f-body); }
 .wrap { max-width: 1120px; margin: 0 auto; padding-block: 24px 64px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -125,6 +126,45 @@ table.list .r { text-align: right; }
 .empty { padding: 20px; text-align: center; color: var(--muted); }
 footer { color: var(--muted); font-size: 12px; max-width: 80ch; }
 footer p { margin: 4px 0; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tabs a { padding: 8px 14px; color: var(--muted); text-decoration: none; font-weight: 600; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.tabs a:hover { color: var(--ink); }
+.view { display: grid; gap: 20px; }
+
+.walletform { display: flex; flex-wrap: wrap; gap: 8px; }
+.walletform input { flex: 1 1 280px; min-width: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); font-family: var(--f-num); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border-radius: 999px; background: var(--sunk); font-size: 13px; }
+.chip button { border: 0; background: none; cursor: pointer; color: var(--muted); font-size: 15px; line-height: 1; padding: 2px 6px; border-radius: 999px; }
+.chip button:hover { color: var(--bad); }
+.msg { font-size: 13px; color: var(--warn); }
+.stats { display: flex; flex-wrap: wrap; gap: 28px; }
+
+.pins { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.pinslot { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pinslot select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; min-width: 0; }
+
+.mygrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.pup { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.pup .head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pup .id { font-family: var(--f-num); font-size: 16px; }
+.state { font-size: 12px; font-weight: 600; }
+.state.ok { color: var(--good); } .state.note { color: var(--warn); } .state.no { color: var(--bad); }
+.gbtn { display: inline-flex; align-items: center; gap: 5px; border: 1px solid transparent; background: none; border-radius: 6px; padding: 1px 5px; margin-left: -5px; cursor: pointer; text-align: left; line-height: 1.25; font-size: 12.5px; }
+.gbtn:hover { border-color: var(--line); }
+.gbtn b { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.gbtn.r { color: var(--muted); }
+.gbtn.on { border-color: var(--accent); color: var(--ink); font-weight: 600; background: var(--sunk); }
+.gbtn.on::after { content: "📌"; font-size: 10px; }
+.strength { display: grid; gap: 3px; }
+.meter { height: 6px; border-radius: 999px; background: var(--sunk); overflow: hidden; }
+.meter i { display: block; height: 100%; background: var(--accent); }
+.true { font-size: 12px; color: var(--good); }
+.rowbtn { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-size: 12px; white-space: nowrap; }
+.rowbtn:hover { border-color: var(--accent); }
+.sectionhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -132,10 +172,15 @@ footer p { margin: 4px 0; }
   <header class="top">
     <div>
       <h1>Pupkins Breeder</h1>
-      <p>Pick two Pupkins to see what their child can be, what the hatch costs, and which partner gives you the best shot at the parts you want.</p>
+      <p>Work out what any two Pupkins can hatch, track the Pupkins in your wallets, and find the pairs that get you closest to the traits you're breeding for.</p>
     </div>
     <div class="snap" id="snap"><span class="pill">Loading Pupkins…</span></div>
   </header>
+
+  <nav class="tabs" aria-label="Views">
+    <a href="#calc" id="tabCalc" aria-current="page">Breeding calculator</a>
+    <a href="#mine" id="tabMine">My Pupkins</a>
+  </nav>
 
   <details class="odds" id="oddsBox">
     <summary>Inheritance odds (per parent, per part)</summary>
@@ -148,6 +193,7 @@ footer p { margin: 4px 0; }
     <p>Pupkins hasn't published its odds. These defaults are Axie's: each part comes from one parent's D, R1 or R2 at 37.5 / 9.375 / 3.125%, and the class is a 50/50 pick. If you enter other numbers, they're scaled so each parent counts for half.</p>
   </details>
 
+  <div class="view" id="viewCalc">
   <section class="parents" aria-label="Parents">
     <div class="card" id="cardA"></div>
     <div class="heart" aria-hidden="true">+</div>
@@ -188,6 +234,49 @@ footer p { margin: 4px 0; }
     <div class="targets" id="targets"></div>
     <div class="tablewrap"><table class="list" id="finder"></table></div>
   </section>
+  </div>
+
+  <div class="view" id="viewMine" hidden>
+    <section class="card" aria-labelledby="walletH">
+      <div class="sectionhead"><h2 id="walletH">Your wallets</h2><span class="muted" style="font-size:12px">Saved in this browser only</span></div>
+      <form class="walletform" id="walletForm">
+        <input id="walletIn" autocomplete="off" spellcheck="false" placeholder="Wallet address (0x…) or portal name" aria-label="Wallet address or portal name">
+        <button class="btn primary" type="submit">Add wallet</button>
+      </form>
+      <div class="msg" id="walletMsg" hidden></div>
+      <div class="chips" id="walletChips"></div>
+      <div class="stats" id="mySum"></div>
+    </section>
+
+    <div class="view" id="mineBody">
+      <section class="card" aria-labelledby="pinH">
+        <div class="sectionhead"><h2 id="pinH">Ideal breed: pinned traits</h2>
+          <button class="btn" type="button" id="pinClear">Clear pins</button></div>
+        <p class="muted" style="margin:0">Pin the parts you want your Pupkins to end up with. Click any gene on your Pupkins below, or pick from the lists. Several pins in one slot means any of them is fine.</p>
+        <div class="pins" id="pins"></div>
+      </section>
+
+      <section class="card" aria-labelledby="sugH">
+        <div class="sectionhead"><h2 id="sugH">Suggested breeds from your Pupkins</h2><span class="muted" style="font-size:12px" id="sugNote"></span></div>
+        <div class="tablewrap"><table class="list" id="sugTable"></table></div>
+      </section>
+
+      <section class="card" aria-labelledby="buyH">
+        <div class="sectionhead"><h2 id="buyH">Partners to buy</h2><span class="muted" style="font-size:12px">For sale on the portal, best pinned-trait odds per ETH</span></div>
+        <div class="tablewrap"><table class="list" id="buyTable"></table></div>
+      </section>
+
+      <section aria-labelledby="myH" class="view">
+        <div class="sectionhead"><h2 id="myH">Your Pupkins</h2>
+          <div class="seg" role="group" aria-label="Sort your Pupkins">
+            <button type="button" id="mySortPins" aria-pressed="true">Pinned genes</button>
+            <button type="button" id="mySortReady" aria-pressed="false">Ready first</button>
+            <button type="button" id="mySortId" aria-pressed="false">Number</button>
+          </div></div>
+        <div class="mygrid" id="myGrid"></div>
+      </section>
+    </div>
+  </div>
 
   <footer>
     <p>The rules come from the portal's own code: 7 hatches max, no breeding with a parent, child or sibling, Origins can't breed, and each parent pays SCHIFFY by how many times it has hatched (900, 1,350, 2,250, 3,600, 5,850, 9,450, 15,300).</p>
@@ -246,6 +335,24 @@ function targetP(A, B, targets, w) {
   for (let s = 0; s < 6; s++) if (targets[s] != null) p *= slotP(A, B, s, targets[s], w);
   return p;
 }
+// pins[s] = list of acceptable parts for slot s (empty = any). Chance the child shows an acceptable part in every pinned slot.
+function pinsP(A, B, pins, w) {
+  let p = 1;
+  for (let s = 0; s < 6; s++) if (pins[s].length) {
+    let q = 0; for (const x of pins[s]) q += slotP(A, B, s, x, w); p *= q;
+  }
+  return p;
+}
+// How well one Pupkin passes pinned parts: average over pinned slots of the chance a gene it hands down is pinned (0..1).
+function pinStrength(P, pins, w) {
+  let t = 0, n = 0;
+  for (let s = 0; s < 6; s++) if (pins[s].length) {
+    n++; let q = 0;
+    for (let k = 0; k < 3; k++) if (pins[s].includes(P.g[s * 3 + k])) q += w[k];
+    t += q / (w[0] + w[1] + w[2]);
+  }
+  return n ? t / n : null;
+}
 function classOdds(A, B) {
   const m = new Map(); m.set(A.c, 0.5); m.set(B.c, (m.get(B.c) || 0) + 0.5); return m;
 }
@@ -301,7 +408,7 @@ function renderCard(which) {
       <span class="pill">Next hatch <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>
       ${price}
       ${P.one ? `<span class="pill warn">1 of 1 · ${esc(P.one)}</span>` : ""}
-      ${P.who ? `<span class="pill">Owner ${esc(P.who)}</span>` : ""}
+      ${who(P) ? `<span class="pill">Owner ${esc(who(P))}</span>` : ""}
     </div>
     <div class="tablewrap"><table class="genes"><thead><tr><th>Slot</th><th>Shown (D)</th><th>R1</th><th>R2</th></tr></thead><tbody>${rows}</tbody></table></div>
     <a class="portal" href="https://portal.pupkins.gg/pupkins/${P.id}" target="_blank" rel="noopener">Open ${tag(P.id)} on the portal ↗</a>`;
@@ -370,7 +477,7 @@ function renderFinder() {
       <td class="r num">${pur.toFixed(2)}</td>
       <td class="r num">${fmt(parentCost(A.h) + parentCost(B.h))}</td>
       <td class="r num">${B.eth != null ? B.eth + " ETH" : "–"}</td>
-      <td>${esc(B.who || "")}</td></tr>`).join("") +
+      <td>${esc(who(B))}</td></tr>`).join("") +
     `</tbody><tfoot><tr><td colspan="7" class="muted" style="padding-top:8px">Showing ${top.length} of ${fmt(rows.length)} Pupkins that can breed with ${tag(A.id)}${S.sort === "value" ? ", most target odds per ETH first (not for sale go last)" : ", best target odds first"}. Click a row to use it as parent B.</td></tr></tfoot>`;
 }
 function renderAll() { renderCard("a"); renderCard("b"); renderRules(); renderChild(); renderTargets(); renderFinder(); saveHash(); }
@@ -385,7 +492,7 @@ function setParent(which, v) {
 }
 function targetsFromA() { S.targets = S.a ? SLOTS.map((_, s) => S.a.g[s * 3]) : [null, null, null, null, null, null]; }
 function saveHash() {
-  if (!S.a || !S.b) return;
+  if (!S.a || !S.b || $("viewCalc").hidden) return;
   const h = "#a" + S.a.id + "-b" + S.b.id;
   if (location.hash !== h) try { history.replaceState(null, "", h); } catch (e) {}
 }
@@ -424,6 +531,204 @@ $("tgtClear").onclick = () => { S.targets = [null, null, null, null, null, null]
 for (const [k, id] of [[0, "wD"], [1, "wR1"], [2, "wR2"]]) $(id).addEventListener("input", () => { S.w[k] = Math.max(0, parseFloat($(id).value) || 0); renderChild(); renderFinder(); });
 $("oddsReset").onclick = () => { S.w = DEFAULT_W.slice(); $("wD").value = 37.5; $("wR1").value = 9.375; $("wR2").value = 3.125; renderChild(); renderFinder(); };
 
+/* ---------- My Pupkins ---------- */
+const M = { wallets: [], pins: [[], [], [], [], [], []], sort: "pins" };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const who = p => (DATA && DATA.owners[p.w] || [])[1] || "";
+const addrOf = p => (DATA && DATA.owners[p.w] || [])[0] || "";
+const short = a => a.slice(0, 6) + "…" + a.slice(-4);
+const anyPins = () => M.pins.some(x => x.length);
+function savePrefs() { store.set("pb.wallets", M.wallets); store.set("pb.pins", M.pins); }
+function loadPrefs() {
+  const w = store.get("pb.wallets", []), p = store.get("pb.pins", null);
+  M.wallets = Array.isArray(w) ? w.filter(x => /^0x[0-9a-f]{40}$/.test(x)) : [];
+  if (Array.isArray(p) && p.length === 6) M.pins = p.map((x, s) => Array.isArray(x) ? x.filter(i => PARTS[i] && PARTS[i][0] === s) : []);
+}
+function myPupkins() { const set = new Set(M.wallets); return DATA.pupkins.filter(p => set.has(addrOf(p))); }
+function statusOf(p, now = Date.now()) {
+  if (p.o) return ["Origin, can't breed", "no"];
+  if (p.h >= MAX_HATCH) return ["Sterile", "no"];
+  if (p.cd && Date.parse(p.cd) > now) return ["Resting until " + new Date(p.cd).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }), "note"];
+  if (p.st === "listed") return ["For sale at " + p.eth + " ETH", "note"];
+  if (p.st === "lent" || p.st === "borrowed") return [p.st === "lent" ? "Lent out" : "Borrowed", "note"];
+  return ["Ready to breed", "ok"];
+}
+function walletCounts() { const m = new Map(); for (const p of DATA.pupkins) m.set(p.w, (m.get(p.w) || 0) + 1); return m; }
+function exampleWallet() {
+  let best = null, bd = 1e9;
+  for (const [w, n] of walletCounts()) { const d = Math.abs(n - 12); if (d < bd) { bd = d; best = w; } }
+  return DATA.owners[best];
+}
+function addWallet(raw) {
+  const v = raw.trim(), msg = $("walletMsg");
+  msg.hidden = true;
+  if (!v) return;
+  let found = [];
+  if (/^0x[0-9a-fA-F]{40}$/.test(v)) found = [v.toLowerCase()];
+  else found = DATA.owners.filter(o => o[1] && o[1].toLowerCase() === v.toLowerCase()).map(o => o[0]);
+  if (!found.length) { msg.textContent = `No owner called "${v}" in today's data. Enter the full wallet address (0x followed by 40 characters).`; msg.hidden = false; return; }
+  for (const a of found) if (!M.wallets.includes(a)) M.wallets.push(a);
+  const has = new Set(DATA.pupkins.map(addrOf));
+  if (!found.some(a => has.has(a))) { msg.textContent = "That wallet has no Pupkins in today's data. The data refreshes daily at 9:00, so new buys show up after that."; msg.hidden = false; }
+  $("walletIn").value = "";
+  savePrefs(); renderMine();
+}
+function geneBtn(P, s, k) {
+  const i = P.g[s * 3 + k], c = CLASSES[partCls(i)], on = M.pins[s].includes(i);
+  return `<button type="button" class="gbtn${k ? " r" : ""}${on ? " on" : ""}" data-pin="${s}:${i}" aria-pressed="${on}" title="${on ? "Unpin" : "Pin"} ${esc(partName(i))}"><b style="background:${c.color}"></b>${esc(partName(i))}</button>`;
+}
+function togglePin(s, i) {
+  const a = M.pins[s], at = a.indexOf(i);
+  if (at >= 0) a.splice(at, 1); else a.push(i);
+  savePrefs(); renderMine();
+}
+function openCalc(aId, bId) {
+  S.a = BYID.get(aId);
+  S.targets = anyPins() ? M.pins.map(x => x.length ? x[0] : null) : SLOTS.map((_, s) => S.a.g[s * 3]);
+  S.b = bId ? BYID.get(bId) : bestPartner(S.a);
+  location.hash = "#a" + S.a.id + "-b" + S.b.id;
+}
+function renderMine() {
+  const mine = myPupkins(), w = weights(), pinsOn = anyPins();
+  // wallets
+  $("walletChips").innerHTML = M.wallets.map(a => {
+    const o = DATA.owners.find(x => x[0] === a), n = mine.filter(p => addrOf(p) === a).length;
+    return `<span class="chip"><span class="num">${short(a)}</span>${o && o[1] ? ` · ${esc(o[1])}` : ""} · ${n} Pupkin${n === 1 ? "" : "s"}<button type="button" data-unwallet="${a}" aria-label="Remove wallet ${short(a)}">×</button></span>`;
+  }).join("") || (() => {
+    const ex = exampleWallet();
+    return `<span class="muted">Add a wallet to see its Pupkins, pin the traits you're breeding for, and get pair suggestions.</span>
+      <button class="btn" type="button" data-example="${ex[0]}">Try an example wallet (${esc(ex[1] || short(ex[0]))})</button>`;
+  })();
+  $("mineBody").hidden = !M.wallets.length;
+  if (!M.wallets.length) { $("mySum").innerHTML = ""; return; }
+  const ready = mine.filter(p => statusOf(p)[1] === "ok").length;
+  const left = mine.reduce((t, p) => t + (p.o ? 0 : MAX_HATCH - p.h), 0);
+  const byCls = CLASSES.map((c, i) => [c, mine.filter(p => p.c === i).length]).filter(x => x[1]);
+  $("mySum").innerHTML = `
+    <div class="stat"><div class="label">Pupkins</div><div class="v">${mine.length}</div></div>
+    <div class="stat"><div class="label">Ready to breed</div><div class="v">${ready}</div></div>
+    <div class="stat"><div class="label">Hatches left</div><div class="v">${left}</div></div>
+    <div class="stat" style="align-self:end"><div class="chips">${byCls.map(([c, n]) => `<span class="cls" style="background:${c.color}"><i></i>${esc(c.name)} ${n}</span>`).join("")}</div></div>`;
+
+  // pins
+  $("pins").innerHTML = SLOTS.map((n, s) => {
+    const chips = M.pins[s].map(i => `<span class="chip">${geneHtml(i)}<button type="button" data-unpin="${s}:${i}" aria-label="Unpin ${esc(partName(i))}">×</button></span>`).join("");
+    const opts = CLASSES.map((c, ci) => `<optgroup label="${esc(c.name)}">${PARTS.map((p, i) => [p, i]).filter(([p, i]) => p[0] === s && p[1] === ci && !M.pins[s].includes(i))
+      .sort((x, y) => x[0][2].localeCompare(y[0][2])).map(([p, i]) => `<option value="${i}">${esc(p[2])}</option>`).join("")}</optgroup>`).join("");
+    return `<div class="pinslot"><h3>${n}</h3><div class="chips">${chips || `<span class="muted" style="font-size:12px">Any part</span>`}</div>
+      <label class="muted" style="font-size:12px" for="pin${s}">Add a part<select id="pin${s}" data-addpin="${s}"><option value="">Choose…</option>${opts}</select></label></div>`;
+  }).join("");
+
+  // suggested pairs among your own Pupkins
+  const pairs = [];
+  const breedable = mine.filter(p => !p.o && p.h < MAX_HATCH);
+  for (let i = 0; i < breedable.length; i++) for (let j = i + 1; j < breedable.length; j++) {
+    const A = breedable[i], B = breedable[j];
+    if (!canPair(A, B)) continue;
+    pairs.push({ A, B, p: pinsOn ? pinsP(A, B, M.pins, w) : null, pur: expPurity(A, B, w), cost: parentCost(A.h) + parentCost(B.h) });
+  }
+  pairs.sort((x, y) => (pinsOn ? y.p - x.p : 0) || y.pur - x.pur || x.cost - y.cost || x.A.id - y.A.id);
+  $("sugNote").textContent = pairs.length ? `${fmt(pairs.length)} possible pair${pairs.length === 1 ? "" : "s"}${pinsOn ? ", best pinned-trait odds first" : ", most pure first. Pin traits to rank by them"}` : "";
+  const stateCell = (A, B) => { const ns = [A, B].map(statusOf).filter(s => s[1] !== "ok"); return ns.length ? `<span class="state note">${ns.map(s => esc(s[0])).join("; ")}</span>` : `<span class="state ok">Both ready</span>`; };
+  $("sugTable").innerHTML = pairs.length ? `<thead><tr><th>Pair</th><th>Classes</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th>Status</th><th></th></tr></thead><tbody>` +
+    pairs.slice(0, 15).map(({ A, B, p, pur, cost }) => `<tr>
+      <td class="num">${tag(A.id)} + ${tag(B.id)}</td>
+      <td>${clsChip(A.c)}${A.c !== B.c ? " " + clsChip(B.c) : ""}</td>
+      <td class="r num">${p == null ? "–" : pct(p)}</td>
+      <td class="r num">${pur.toFixed(2)}</td>
+      <td class="r num">${fmt(cost)}</td>
+      <td>${stateCell(A, B)}</td>
+      <td><button class="rowbtn" type="button" data-open="${A.id}:${B.id}">Open in calculator</button></td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">${breedable.length < 2 ? "You need at least two Pupkins with hatches left to breed them together." : "None of your Pupkins can breed with each other (family, Origins or no hatches left)."}</td></tr></tbody>`;
+
+  // partners to buy
+  const mineSet = new Set(mine.map(p => p.id));
+  const listed = DATA.pupkins.filter(p => p.eth != null && !mineSet.has(p.id) && !p.o && p.h < MAX_HATCH);
+  const buys = [];
+  for (const A of breedable) {
+    let best = null;
+    for (const B of listed) {
+      if (!canPair(A, B)) continue;
+      const p = pinsOn ? pinsP(A, B, M.pins, w) : null, pur = expPurity(A, B, w);
+      const v = (pinsOn ? p : pur / 6) / B.eth;
+      if (!best || v > best.v) best = { A, B, p, pur, v };
+    }
+    if (best) buys.push(best);
+  }
+  buys.sort((x, y) => y.v - x.v);
+  $("buyTable").innerHTML = buys.length ? `<thead><tr><th>Your Pupkin</th><th>Buy</th><th>Class</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Price</th><th></th></tr></thead><tbody>` +
+    buys.slice(0, 10).map(({ A, B, p, pur }) => `<tr>
+      <td class="num">${tag(A.id)}</td><td class="num">${tag(B.id)}</td><td>${clsChip(B.c)}</td>
+      <td class="r num">${p == null ? "–" : pct(p)}</td><td class="r num">${pur.toFixed(2)}</td>
+      <td class="r num">${B.eth} ETH</td>
+      <td><button class="rowbtn" type="button" data-open="${A.id}:${B.id}">Open in calculator</button></td></tr>`).join("") + "</tbody>"
+    : `<tbody><tr><td class="empty">Nothing for sale can breed with your Pupkins right now.</td></tr></tbody>`;
+
+  // your Pupkins
+  const rank = { ok: 0, note: 1, no: 2 };
+  const list = mine.map(P => ({ P, st: statusOf(P), ps: pinStrength(P, M.pins, w) }));
+  list.sort(M.sort === "id" ? (x, y) => x.P.id - y.P.id
+    : M.sort === "ready" ? (x, y) => rank[x.st[1]] - rank[y.st[1]] || (y.ps ?? 0) - (x.ps ?? 0) || x.P.id - y.P.id
+    : (x, y) => (y.ps ?? 0) - (x.ps ?? 0) || rank[x.st[1]] - rank[y.st[1]] || x.P.id - y.P.id);
+  $("myGrid").innerHTML = list.length ? list.map(({ P, st, ps }) => {
+    const trueSlots = SLOTS.filter((_, s) => { const i = P.g[s * 3]; return M.pins[s].includes(i) && P.g[s * 3 + 1] === i && P.g[s * 3 + 2] === i; });
+    const rows = SLOTS.map((n, s) => `<tr><td class="slotname">${n}</td><td>${geneBtn(P, s, 0)}</td><td>${geneBtn(P, s, 1)}</td><td>${geneBtn(P, s, 2)}</td></tr>`).join("");
+    return `<article class="pup">
+      <div class="head"><span class="id">${tag(P.id)}</span>${clsChip(P.c)}${P.one ? `<span class="pill warn">1 of 1 · ${esc(P.one)}</span>` : ""}</div>
+      <div class="facts">
+        <span class="state ${st[1]}">${esc(st[0])}</span>
+        <span class="pill">Gen <span class="num">${P.gen}</span></span>
+        <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
+        ${P.h < MAX_HATCH && !P.o ? `<span class="pill">Next <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>` : ""}
+      </div>
+      ${ps != null ? `<div class="strength"><div class="label">Passes pinned parts ${Math.round(ps * 100)}%</div><div class="meter"><i style="width:${ps * 100}%"></i></div></div>` : ""}
+      ${trueSlots.length ? `<div class="true">Breeds true for pinned ${trueSlots.join(", ")}</div>` : ""}
+      <div class="tablewrap"><table class="genes"><thead><tr><th>Slot</th><th>Shown (D)</th><th>R1</th><th>R2</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="bar-row"><button class="rowbtn" type="button" data-open="${P.id}:">Find a partner</button>
+        <a class="portal" href="https://portal.pupkins.gg/pupkins/${P.id}" target="_blank" rel="noopener">Portal ↗</a></div>
+    </article>`;
+  }).join("") : `<div class="empty">No Pupkins in these wallets in today's data.</div>`;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-pin],[data-unpin],[data-unwallet],[data-example],[data-open]");
+  if (!t) return;
+  if (t.dataset.pin || t.dataset.unpin) { const [s, i] = (t.dataset.pin || t.dataset.unpin).split(":").map(Number); togglePin(s, i); }
+  else if (t.dataset.unwallet) { M.wallets = M.wallets.filter(a => a !== t.dataset.unwallet); savePrefs(); renderMine(); }
+  else if (t.dataset.example) { addWallet(t.dataset.example); }
+  else if (t.dataset.open) { const [a, b] = t.dataset.open.split(":"); openCalc(+a, b ? +b : null); }
+});
+document.addEventListener("change", e => {
+  const sel = e.target.closest("[data-addpin]");
+  if (sel && sel.value !== "") { const s = +sel.dataset.addpin, i = +sel.value; if (!M.pins[s].includes(i)) M.pins[s].push(i); savePrefs(); renderMine(); }
+});
+$("walletForm").addEventListener("submit", e => { e.preventDefault(); addWallet($("walletIn").value); });
+$("pinClear").onclick = () => { M.pins = [[], [], [], [], [], []]; savePrefs(); renderMine(); };
+function setMySort(so) { M.sort = so; for (const [id, v] of [["mySortPins", "pins"], ["mySortReady", "ready"], ["mySortId", "id"]]) $(id).setAttribute("aria-pressed", so === v); renderMine(); }
+$("mySortPins").onclick = () => setMySort("pins");
+$("mySortReady").onclick = () => setMySort("ready");
+$("mySortId").onclick = () => setMySort("id");
+
+/* ---------- views ---------- */
+function route() {
+  if (!DATA) return;
+  const mine = location.hash === "#mine";
+  $("viewCalc").hidden = mine; $("viewMine").hidden = !mine;
+  $("tabCalc").setAttribute("aria-current", mine ? "false" : "page");
+  $("tabMine").setAttribute("aria-current", mine ? "page" : "false");
+  if (mine) { renderMine(); return; }
+  const m = /^#a(\d+)-b(\d+)$/.exec(location.hash);
+  if (m && BYID.get(+m[1]) && BYID.get(+m[2]) && (S.a.id !== +m[1] || S.b.id !== +m[2])) {
+    S.a = BYID.get(+m[1]); S.b = BYID.get(+m[2]); targetsFromA();
+  }
+  renderAll();
+}
+window.addEventListener("hashchange", route);
+for (const id of ["wD", "wR1", "wR2"]) $(id).addEventListener("input", () => { if (!$("viewMine").hidden) renderMine(); });
+$("oddsReset").addEventListener("click", () => { if (!$("viewMine").hidden) renderMine(); });
+
 /* ---------- load ---------- */
 fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
   DATA = d; PARTS = d.parts; d.pupkins.forEach(p => BYID.set(p.id, p));
@@ -440,7 +745,8 @@ fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r
   S.a = (m && BYID.get(+m[1])) || listedSorted[0] || d.pupkins[0];
   targetsFromA();
   S.b = (m && BYID.get(+m[2])) || bestPartner(S.a);
-  renderAll();
+  loadPrefs();
+  route();
 }).catch(err => {
   $("snap").innerHTML = `<span class="pill warn">Couldn't load the Pupkins data (pupkins.json). Run build.ps1 and publish again.</span>`;
 });
