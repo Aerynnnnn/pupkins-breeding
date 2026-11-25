@@ -194,6 +194,15 @@ footer p { margin: 4px 0; }
 .where span { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
 .where span.on { background: var(--accent); color: var(--accent-ink); }
 .usd { color: var(--muted); font-size: 11.5px; }
+.pickwallet { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pickwallet img { width: 20px; height: 20px; border-radius: 5px; }
+.pickwallet .btn { display: inline-flex; align-items: center; gap: 8px; }
+.bal { display: block; font-size: 11.5px; color: var(--muted); font-family: var(--f-num); }
+.egggrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.egg { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; gap: 12px; align-items: center; min-width: 0; }
+.egg .info { display: grid; gap: 4px; min-width: 0; font-size: 12.5px; }
+.egg .when { font-weight: 600; }
+.egg .when.ok { color: var(--good); }
 @media (max-width: 560px) { .stats { gap: 16px; } .stat .v { font-size: 22px; } h1 { font-size: 26px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -280,7 +289,10 @@ footer p { margin: 4px 0; }
       <form class="walletform" id="walletForm">
         <input id="walletIn" autocomplete="off" spellcheck="false" placeholder="Wallet address (0x…) or portal name" aria-label="Wallet address or portal name">
         <button class="btn primary" type="submit">Add wallet</button>
+        <button class="btn" type="button" id="connectBtn">Connect wallet</button>
       </form>
+      <div class="pickwallet" id="walletPick" hidden></div>
+      <p class="muted" style="margin:0;font-size:12px">Connect only reads your wallet's address: it never asks you to sign or approve anything. Signed up on the portal with email? Type your portal name, or paste the wallet address shown on your portal profile.</p>
       <div class="msg" id="walletMsg" hidden></div>
       <div class="chips" id="walletChips"></div>
       <div class="stats" id="mySum"></div>
@@ -299,6 +311,11 @@ footer p { margin: 4px 0; }
           <button class="btn" type="button" id="pinClear">Clear pins</button></div>
         <p class="muted" style="margin:0">Pin the parts you want your Pupkins to end up with. Click any gene on your Pupkins below, or pick from the lists. Several pins in one slot means any of them is fine.</p>
         <div class="pins" id="pins"></div>
+      </section>
+
+      <section class="card" aria-labelledby="eggH" id="eggCard" hidden>
+        <div class="sectionhead"><h2 id="eggH">Your eggs</h2><span class="muted" style="font-size:12px">An egg can crack 4 days after it's laid. Cracking is free; then up to 5 rerolls.</span></div>
+        <div class="egggrid" id="eggGrid"></div>
       </section>
 
       <section class="card" aria-labelledby="sugH">
@@ -767,8 +784,8 @@ function addWallet(raw) {
   else found = DATA.owners.filter(o => o[1] && o[1].toLowerCase() === v.toLowerCase()).map(o => o[0]);
   if (!found.length) { msg.textContent = `No owner called "${v}" in today's data. Enter the full wallet address (0x followed by 40 characters).`; msg.hidden = false; return; }
   for (const a of found) if (!M.wallets.includes(a)) M.wallets.push(a);
-  const has = new Set(DATA.pupkins.map(addrOf));
-  if (!found.some(a => has.has(a))) { msg.textContent = "That wallet has no Pupkins in today's data. The data refreshes daily at 9:00, so new buys show up after that."; msg.hidden = false; }
+  const has = new Set([...DATA.pupkins, ...(DATA.eggs || [])].map(addrOf));
+  if (!found.some(a => has.has(a))) { msg.textContent = "That wallet has no Pupkins or eggs in today's data. The data refreshes daily at 9:00, so new buys show up after that."; msg.hidden = false; }
   $("walletIn").value = "";
   savePrefs(); renderMine();
 }
@@ -791,8 +808,8 @@ function renderMine() {
   const mine = myPupkins(), w = weights(), pinsOn = anyPins();
   // wallets
   $("walletChips").innerHTML = M.wallets.map(a => {
-    const o = DATA.owners.find(x => x[0] === a), n = mine.filter(p => addrOf(p) === a).length;
-    return `<span class="chip"><span class="num">${short(a)}</span>${o && o[1] ? ` · ${esc(o[1])}` : ""} · ${n} Pupkin${n === 1 ? "" : "s"}<button type="button" data-unwallet="${a}" aria-label="Remove wallet ${short(a)}">×</button></span>`;
+    const o = DATA.owners.find(x => x[0] === a), n = mine.filter(p => addrOf(p) === a).length, ne = myEggs().filter(e => addrOf(e) === a).length, b = BAL.by[a];
+    return `<span class="chip"><span><span class="num">${short(a)}</span>${o && o[1] ? ` · ${esc(o[1])}` : ""} · ${n} Pupkin${n === 1 ? "" : "s"}${ne ? ` · ${ne} egg${ne === 1 ? "" : "s"}` : ""}${b ? `<span class="bal">${balTxt(b)}</span>` : ""}</span><button type="button" data-unwallet="${a}" aria-label="Remove wallet ${short(a)}">×</button></span>`;
   }).join("") || (() => {
     const ex = exampleWallet();
     return `<span class="muted">Add a wallet to see its Pupkins, pin the traits you're breeding for, and get pair suggestions.</span>
@@ -806,12 +823,17 @@ function renderMine() {
   const byCls = CLASSES.map((c, i) => [c, mine.filter(p => p.c === i).length]).filter(x => x[1]);
   const floorVal = mine.reduce((t, p) => t + (ST.floor[p.c] ? ST.floor[p.c].eth : 0), 0), noFloor = mine.filter(p => !ST.floor[p.c]).length;
   let budget = 0; for (const p of mine) if (!p.o) for (let h = p.h; h < MAX_HATCH; h++) budget += parentCost(h);
+  const backTot = mine.reduce((t, p) => t + (backingUsd(p) || 0), 0);
+  renderEggs();
+  loadBalances();
   $("mySum").innerHTML = `
     <div class="stat"><div class="label">Pupkins</div><div class="v">${mine.length}</div></div>
     <div class="stat"><div class="label">Ready to breed</div><div class="v">${ready}</div></div>
     <div class="stat"><div class="label">Breeds left</div><div class="v">${left}</div></div>
     <div class="stat"><div class="label">Worth at class floors</div><div class="v">${floorVal ? +floorVal.toFixed(3) + " ETH" : "–"}</div><div class="s">${floorVal ? "~$" + fmt(Math.round(floorVal * DATA.ethUsd)) + (noFloor ? `, ${noFloor} not counted (none of their class for sale)` : ", a rough guide") : ""}</div></div>
     <div class="stat"><div class="label">Every breed left</div><div class="v">${usd(budget)}</div><div class="s">your share, before rerolls</div></div>
+    <div class="stat"><div class="label">Backing inside them</div><div class="v">${backTot ? "$" + fmt(Math.round(backTot)) : "–"}</div><div class="s">stock + SCHIFFY, at today's prices</div></div>
+    <div class="stat"><div class="label">In your wallets</div><div class="v" id="balV">${balSum()}</div><div class="s" id="balS">${balNote()}</div></div>
     <div class="stat" style="align-self:end"><div class="chips">${byCls.map(([c, n]) => `<span class="cls" style="background:${c.color}"><i></i>${esc(c.name)} ${n}</span>`).join("")}</div></div>`;
 
   // pins
@@ -889,6 +911,7 @@ function renderMine() {
         <span class="pill">Gen <span class="num">${P.gen}</span></span>
         <span class="pill">Breeds <span class="num">${P.h}/${MAX_HATCH}</span></span>
         ${P.h < MAX_HATCH && !P.o ? `<span class="pill">Next <span class="num">${usd(parentCost(P.h))}</span></span>` : ""}
+        ${backingUsd(P) ? `<span class="pill" title="${esc(backingTxt(P))}">Backing <span class="num">~$${backingUsd(P).toFixed(2)}</span></span>` : ""}
       </div></div></div>
       ${ps != null ? `<div class="strength"><div class="label">Passes pinned parts ${Math.round(ps * 100)}%</div><div class="meter"><i style="width:${ps * 100}%"></i></div></div>` : ""}
       ${trueSlots.length ? `<div class="true">Breeds true for pinned ${trueSlots.join(", ")}</div>` : ""}
@@ -985,6 +1008,116 @@ function breedWith(id, part) {
   location.hash = "#a" + S.a.id + "-b" + S.b.id;
   window.scrollTo({ top: 0 });
 }
+
+/* ---------- backing, eggs, wallets on chain ---------- */
+// A Pupkin's backing: the stock shares + SCHIFFY in its own account, priced with today's quotes from the snapshot.
+function backingUsd(P) {
+  if (!DATA.quotes || !P.tk) return null;
+  const s = (P.sh || 0) * (DATA.quotes[P.tk] || 0), c = (P.sc || 0) * (DATA.schiffyUsd || 0);
+  return s + c || null;
+}
+const backingTxt = P => `${+(P.sh || 0).toFixed(5)} ${P.tk} (~$${((P.sh || 0) * (DATA.quotes[P.tk] || 0)).toFixed(2)}) + ${fmt(Math.round(P.sc || 0))} SCHIFFY (~$${((P.sc || 0) * (DATA.schiffyUsd || 0)).toFixed(2)})`;
+
+const EGG_KEYS = ["guardian", "enforcer", "adventurer", "trickster", "oracle", "hunter"];
+function myEggs() { if (!DATA || !DATA.eggs) return []; const set = new Set(M.wallets); return DATA.eggs.filter(e => set.has(addrOf(e)) && !e.kid); }
+function eggPic(E) {
+  const c = CLASSES[E.c] || { color: "#A8A1B3" };
+  return `<span class="pic md" style="--c:${c.color}" data-dog="Egg"><img src="https://portal.pupkins.gg/img/egg/${EGG_KEYS[E.c] || "plain"}.png" alt="${esc(c.name || "")} egg" loading="lazy" decoding="async"></span>`;
+}
+function untilTxt(ms) {
+  const h = Math.ceil(ms / 3.6e6);
+  return h >= 24 ? `${Math.floor(h / 24)}d ${h % 24}h` : `${h}h`;
+}
+function renderEggs() {
+  const eggs = myEggs().sort((x, y) => Date.parse(x.ready) - Date.parse(y.ready)), now = Date.now();
+  $("eggCard").hidden = !eggs.length;
+  $("eggGrid").innerHTML = eggs.map(E => {
+    const left = Date.parse(E.ready) - now, ready = left <= 0;
+    const st = E.st === "cracked" ? "Cracked: rerolling" : ready ? "Ready to crack" : "Can crack in " + untilTxt(left);
+    return `<article class="egg">${eggPic(E)}<div class="info">
+      <div><b class="num">Egg ${tag(E.id)}</b> ${clsChip(E.c)}</div>
+      <span class="when${ready || E.st === "cracked" ? " ok" : ""}">${esc(st)}</span>
+      <span class="muted">${ready ? "Ready since" : "Ready"} ${new Date(E.ready).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
+      <span class="muted">Parents ${(E.par || []).map(id => `<a class="portal" href="https://portal.pupkins.gg/pupkins/${id}" target="_blank" rel="noopener">${tag(id)}</a>`).join(" + ")}</span>
+      ${E.eth != null ? `<span>For sale · ${priceCell(E.eth)}</span>` : ""}
+      <span class="muted">Hatches Gen ${Math.max(...(E.par || [0]).map(id => (BYID.get(id) || { gen: 0 }).gen)) + 1} with ~${usd(BACKING_USD)} backing</span>
+      <a class="portal" href="https://portal.pupkins.gg/eggs/${E.id}" target="_blank" rel="noopener">Open on the portal ↗</a>
+    </div></article>`;
+  }).join("");
+}
+
+// Live balances on Robinhood Chain (chain 4663): ETH, WETH and SCHIFFY for each tracked wallet. Read-only calls.
+const CHAIN = { rpc: "https://rpc.mainnet.chain.robinhood.com", WETH: "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73", SCHIFFY: "0x42aFA2124ca5a2B83898E46B2dA9a190995b1E18" };
+const BAL = { by: {}, key: "", at: 0, busy: false, err: null };
+const units = hex => { try { return Number(BigInt(hex || "0x0")) / 1e18; } catch (e) { return 0; } };
+const short3 = n => n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n).toLocaleString() : n >= 1 ? n.toFixed(2) : n.toFixed(4);
+const balTxt = b => `${short3(b.eth)} ETH · ${short3(b.weth)} WETH · ${short3(b.schiffy)} SCHIFFY`;
+function balTotals() { const t = { eth: 0, weth: 0, schiffy: 0 }; for (const a of M.wallets) { const b = BAL.by[a]; if (b) for (const k in t) t[k] += b[k]; } return t; }
+function balSum() {
+  if (!M.wallets.some(a => BAL.by[a])) return BAL.err ? "–" : "…";
+  const t = balTotals();
+  return "$" + fmt(Math.round((t.eth + t.weth) * DATA.ethUsd + t.schiffy * (DATA.schiffyUsd || 0)));
+}
+function balNote() {
+  if (BAL.err) return "Live balances can't load here; open the public site to see them";
+  if (!M.wallets.some(a => BAL.by[a])) return "reading Robinhood Chain…";
+  return balTxt(balTotals()) + ", live";
+}
+async function loadBalances(force) {
+  const key = M.wallets.slice().sort().join(",");
+  if (!key || BAL.busy || (!force && key === BAL.key && Date.now() - BAL.at < 60000)) return;
+  BAL.busy = true; BAL.key = key;
+  const calls = [];
+  const bal = (a, tok) => ({ to: tok, data: "0x70a08231" + a.slice(2).padStart(64, "0") });
+  M.wallets.forEach((a, i) => {
+    calls.push({ jsonrpc: "2.0", id: i * 3, method: "eth_getBalance", params: [a, "latest"] });
+    calls.push({ jsonrpc: "2.0", id: i * 3 + 1, method: "eth_call", params: [bal(a, CHAIN.WETH), "latest"] });
+    calls.push({ jsonrpc: "2.0", id: i * 3 + 2, method: "eth_call", params: [bal(a, CHAIN.SCHIFFY), "latest"] });
+  });
+  try {
+    const r = await fetch(CHAIN.rpc, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(calls) });
+    const out = await r.json(), res = {};
+    for (const x of out) res[x.id] = x.result;
+    M.wallets.forEach((a, i) => { BAL.by[a] = { eth: units(res[i * 3]), weth: units(res[i * 3 + 1]), schiffy: units(res[i * 3 + 2]) }; });
+    BAL.err = null; BAL.at = Date.now();
+  } catch (e) { BAL.err = e; BAL.at = Date.now(); }
+  BAL.busy = false;
+  if (!$("viewMine").hidden) renderMine();
+}
+
+// Connect wallet: asks the browser wallet(s) for their address only (EIP-6963 discovery, window.ethereum as fallback).
+const WALLETS = new Map();
+window.addEventListener("eip6963:announceProvider", e => { const d = e.detail; if (d && d.info && d.provider) WALLETS.set(d.info.uuid || d.info.name, d); });
+async function connectWith(provider) {
+  const msg = $("walletMsg"); msg.hidden = true;
+  try {
+    const accts = await provider.request({ method: "eth_requestAccounts" });
+    const got = (accts || []).map(a => String(a).toLowerCase()).filter(a => /^0x[0-9a-f]{40}$/.test(a));
+    if (!got.length) throw new Error("no address");
+    let added = 0; for (const a of got) if (!M.wallets.includes(a)) { M.wallets.push(a); added++; }
+    $("walletPick").hidden = true;
+    savePrefs(); renderMine(); loadBalances(true);
+    msg.textContent = added ? `Added ${added} wallet${added === 1 ? "" : "s"} from your wallet app.` : "That wallet is already on your list.";
+    msg.hidden = false;
+  } catch (e) {
+    msg.textContent = e && e.code === 4001 ? "Connect was cancelled in your wallet." : "Your wallet didn't share an address. You can paste it instead.";
+    msg.hidden = false;
+  }
+}
+$("connectBtn").onclick = async () => {
+  try { window.dispatchEvent(new Event("eip6963:requestProvider")); } catch (e) {}
+  await new Promise(r => setTimeout(r, 300));
+  const list = [...WALLETS.values()], pick = $("walletPick"), msg = $("walletMsg");
+  if (!list.length && window.ethereum) list.push({ info: { name: "Browser wallet", uuid: "injected" }, provider: window.ethereum });
+  if (!list.length) {
+    msg.textContent = "No wallet app found in this browser. Paste your wallet address (0x…) or type your portal name instead. On a phone, open this page in your wallet app's own browser.";
+    msg.hidden = false; return;
+  }
+  if (list.length === 1) return connectWith(list[0].provider);
+  pick.innerHTML = `<span class="muted">Which wallet?</span>` + list.map((w, i) => `<button class="btn" type="button" data-wallet="${i}">${typeof w.info.icon === "string" && w.info.icon.startsWith("data:image/") ? `<img src="${esc(w.info.icon)}" alt="">` : ""}${esc(w.info.name || "Wallet")}</button>`).join("");
+  pick.hidden = false;
+  pick.onclick = e => { const b = e.target.closest("[data-wallet]"); if (b) connectWith(list[+b.dataset.wallet].provider); };
+};
 
 /* ---------- Market ---------- */
 const MK = { part: null, scope: "listed" };
@@ -1106,7 +1239,8 @@ fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r
   const age = new Date(d.asOf);
   $("snap").innerHTML = `<span class="pill">Snapshot ${age.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
     <span class="pill"><span class="num">${fmt(d.pupkins.length)}</span> Pupkins · <span class="num">${listed}</span> for sale</span>
-    <span class="pill${bred ? "" : " warn"}">${bred ? fmt(bred) + " have bred" : "No breeds yet"}</span>`;
+    <span class="pill${bred ? "" : " warn"}">${bred ? fmt(bred) + " have bred" : "No breeds yet"}</span>
+    ${d.eggs ? `<span class="pill"><span class="num">${fmt(d.eggs.filter(e => !e.kid).length)}</span> eggs waiting to hatch</span>` : ""}`;
   const dl = document.createElement("datalist"); dl.id = "ids";
   dl.innerHTML = d.pupkins.map(p => `<option value="${p.id}">${CLASSES[p.c].name}${p.eth != null ? " · " + p.eth + " ETH" : ""}</option>`).join("");
   document.body.appendChild(dl);
