@@ -183,6 +183,18 @@ footer p { margin: 4px 0; }
 .syncbox { display: grid; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
 .syncbox input { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-family: var(--f-num); font-size: 12px; }
 .sectionhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.filters input, .filters select { padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); min-width: 0; }
+.filters input[type="search"] { flex: 1 1 200px; }
+.filters label select { display: block; width: 100%; margin-top: 4px; }
+.filters .grow { flex: 1; }
+.copybox { width: 100%; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); font-family: var(--f-num); font-size: 12px; }
+.bar-row > .copybox { flex: 1 1 260px; width: auto; }
+.where { display: inline-flex; gap: 4px; }
+.where span { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--sunk); color: var(--muted); }
+.where span.on { background: var(--accent); color: var(--accent-ink); }
+.usd { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 560px) { .stats { gap: 16px; } .stat .v { font-size: 22px; } h1 { font-size: 26px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
@@ -198,6 +210,7 @@ footer p { margin: 4px 0; }
   <nav class="tabs" aria-label="Views">
     <a href="#calc" id="tabCalc" aria-current="page">Breeding calculator</a>
     <a href="#mine" id="tabMine">My Pupkins</a>
+    <a href="#market" id="tabMarket">Market</a>
   </nav>
 
   <details class="odds" id="oddsBox">
@@ -212,6 +225,11 @@ footer p { margin: 4px 0; }
   </details>
 
   <div class="view" id="viewCalc">
+  <div class="bar-row">
+    <button class="btn" type="button" id="swapAB">⇄ Swap A and B</button>
+    <button class="btn" type="button" id="copyPair">Copy link to this pair</button>
+    <input class="copybox" id="pairLink" readonly aria-label="Link to this pair" hidden>
+  </div>
   <section class="parents" aria-label="Parents">
     <div class="card" id="cardA"></div>
     <div class="heart" aria-hidden="true">+</div>
@@ -300,9 +318,46 @@ footer p { margin: 4px 0; }
             <button type="button" id="mySortReady" aria-pressed="false">Ready first</button>
             <button type="button" id="mySortId" aria-pressed="false">Number</button>
           </div></div>
+        <div class="filters" role="search" aria-label="Filter your Pupkins">
+          <input id="myFind" type="search" placeholder="Number or part name" aria-label="Find by number or part name" autocomplete="off">
+          <select id="myCls" aria-label="Class"><option value="">All classes</option></select>
+          <select id="myState" aria-label="Status"><option value="">Any status</option><option value="ok">Ready to breed</option><option value="note">Needs a step first</option><option value="no">Can't breed</option></select>
+          <span class="muted" id="myCount" aria-live="polite"></span>
+          <span class="grow"></span>
+          <button class="btn" type="button" id="csvSave">Download CSV</button>
+          <button class="btn" type="button" id="csvCopy">Copy as CSV</button>
+        </div>
+        <textarea class="copybox" id="csvBox" readonly aria-label="Your Pupkins as CSV" rows="4" hidden></textarea>
         <div class="mygrid" id="myGrid"></div>
       </section>
     </div>
+  </div>
+
+  <div class="view" id="viewMarket" hidden>
+    <section class="card" aria-labelledby="flH">
+      <div class="sectionhead"><h2 id="flH">Floor by class</h2><span class="muted" style="font-size:12px">Cheapest for sale in today's snapshot. Click a row to breed with it.</span></div>
+      <div class="tablewrap"><table class="list" id="floorTable"></table></div>
+    </section>
+
+    <section class="card" aria-labelledby="pfH">
+      <div class="sectionhead"><h2 id="pfH">Find Pupkins by part</h2>
+        <div class="seg" role="group" aria-label="Who to show">
+          <button type="button" id="pfListed" aria-pressed="true">For sale</button>
+          <button type="button" id="pfAll" aria-pressed="false">Everyone</button>
+        </div></div>
+      <p class="muted" style="margin:0">Pick a part to see who carries it, how often it's passed on, and the cheapest way to get it into your line. "Passes it" is the chance that Pupkin hands this part to a newborn when its gene is the one drawn.</p>
+      <div class="filters">
+        <label class="muted" for="pfPart" style="font-size:12px;flex:1 1 280px">Part
+          <select id="pfPart"><option value="">Choose a part…</option></select></label>
+      </div>
+      <div class="stats" id="pfStats"></div>
+      <div class="tablewrap"><table class="list" id="pfTable"></table></div>
+    </section>
+
+    <section class="card" aria-labelledby="ptH">
+      <div class="sectionhead"><h2 id="ptH">Breeds-true Pupkins for sale</h2><span class="muted" style="font-size:12px">Slots where the shown gene and both hidden genes are the same part, so it's passed on whichever gene is drawn</span></div>
+      <div class="tablewrap"><table class="list" id="pureTable"></table></div>
+    </section>
   </div>
 
   <footer>
@@ -455,13 +510,13 @@ function pic(P, size) {
 document.addEventListener("error", e => { const t = e.target; if (t && t.tagName === "IMG" && t.parentElement && t.parentElement.classList.contains("pic")) t.remove(); }, true);
 function geneHtml(i, rec) {
   const c = CLASSES[partCls(i)];
-  return `<span class="gene${rec ? " r" : ""}"><b style="background:${c ? c.color : "#A8A1B3"}"></b>${esc(partName(i))}</span>`;
+  return `<span class="gene${rec ? " r" : ""}" title="${esc(rarity(i))}"><b style="background:${c ? c.color : "#A8A1B3"}"></b>${esc(partName(i))}</span>`;
 }
 function renderCard(which) {
   const P = S[which], el = $(which === "a" ? "cardA" : "cardB");
   const L = which.toUpperCase();
   if (!P) { el.innerHTML = `<div class="head"><h3>Parent ${L}</h3></div><p class="muted">Enter a Pupkin number.</p>`; return; }
-  const price = P.eth != null ? `<span class="pill">For sale · <span class="num">${P.eth} ETH</span></span>` : `<span class="pill">Not for sale</span>`;
+  const price = P.eth != null ? `<span class="pill">For sale · <span class="num">${P.eth} ETH</span> ${usdOfEth(P.eth)}</span>` : `<span class="pill">Not for sale</span>`;
   const rows = SLOTS.map((n, s) => `<tr><td class="slotname">${n}</td><td>${geneHtml(P.g[s * 3])}</td><td>${geneHtml(P.g[s * 3 + 1], 1)}</td><td>${geneHtml(P.g[s * 3 + 2], 1)}</td></tr>`).join("");
   el.innerHTML = `
     <div class="head">
@@ -552,7 +607,7 @@ function renderFinder() {
       <td class="r num">${anyT ? pct(p) : "–"}</td>
       <td class="r num">${pur.toFixed(2)}</td>
       <td class="r num">${usd(parentCost(A.h) + parentCost(B.h))}</td>
-      <td class="r num">${B.eth != null ? B.eth + " ETH" : "–"}</td>
+      <td class="r num">${priceCell(B.eth)}</td>
       <td>${esc(who(B))}</td></tr>`).join("") +
     `</tbody><tfoot><tr><td colspan="7" class="muted" style="padding-top:8px">Showing ${top.length} of ${fmt(rows.length)} Pupkins that can breed with ${tag(A.id)}${S.sort === "value" ? ", most target odds per ETH first (not for sale go last)" : ", best target odds first"}. Click a row to use it as parent B.</td></tr></tfoot>`;
 }
@@ -586,11 +641,11 @@ function bestPartner(A) {
 document.addEventListener("click", e => {
   const o = e.target.closest(".opt");
   if (o) { const s = +o.dataset.s, i = +o.dataset.i; S.targets[s] = S.targets[s] === i ? null : i; renderAll(); return; }
-  const r = e.target.closest("tr.pick");
+  const r = e.target.closest("tr.pick[data-id]");
   if (r) { S.b = BYID.get(+r.dataset.id); renderAll(); $("cardB").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
 });
 document.addEventListener("keydown", e => {
-  const r = e.target.closest && e.target.closest("tr.pick");
+  const r = e.target.closest && e.target.closest("tr.pick[data-id]");
   if (r && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); S.b = BYID.get(+r.dataset.id); renderAll(); }
 });
 document.addEventListener("change", e => {
@@ -719,7 +774,7 @@ function addWallet(raw) {
 }
 function geneBtn(P, s, k) {
   const i = P.g[s * 3 + k], c = CLASSES[partCls(i)], on = M.pins[s].includes(i);
-  return `<button type="button" class="gbtn${k ? " r" : ""}${on ? " on" : ""}" data-pin="${s}:${i}" aria-pressed="${on}" title="${on ? "Unpin" : "Pin"} ${esc(partName(i))}"><b style="background:${c.color}"></b>${esc(partName(i))}</button>`;
+  return `<button type="button" class="gbtn${k ? " r" : ""}${on ? " on" : ""}" data-pin="${s}:${i}" aria-pressed="${on}" title="${on ? "Unpin" : "Pin"} · ${esc(rarity(i))}"><b style="background:${c.color}"></b>${esc(partName(i))}</button>`;
 }
 function togglePin(s, i) {
   const a = M.pins[s], at = a.indexOf(i);
@@ -749,10 +804,14 @@ function renderMine() {
   const ready = mine.filter(p => statusOf(p)[1] === "ok").length;
   const left = mine.reduce((t, p) => t + (p.o ? 0 : MAX_HATCH - p.h), 0);
   const byCls = CLASSES.map((c, i) => [c, mine.filter(p => p.c === i).length]).filter(x => x[1]);
+  const floorVal = mine.reduce((t, p) => t + (ST.floor[p.c] ? ST.floor[p.c].eth : 0), 0), noFloor = mine.filter(p => !ST.floor[p.c]).length;
+  let budget = 0; for (const p of mine) if (!p.o) for (let h = p.h; h < MAX_HATCH; h++) budget += parentCost(h);
   $("mySum").innerHTML = `
     <div class="stat"><div class="label">Pupkins</div><div class="v">${mine.length}</div></div>
     <div class="stat"><div class="label">Ready to breed</div><div class="v">${ready}</div></div>
     <div class="stat"><div class="label">Breeds left</div><div class="v">${left}</div></div>
+    <div class="stat"><div class="label">Worth at class floors</div><div class="v">${floorVal ? +floorVal.toFixed(3) + " ETH" : "–"}</div><div class="s">${floorVal ? "~$" + fmt(Math.round(floorVal * DATA.ethUsd)) + (noFloor ? `, ${noFloor} not counted (none of their class for sale)` : ", a rough guide") : ""}</div></div>
+    <div class="stat"><div class="label">Every breed left</div><div class="v">${usd(budget)}</div><div class="s">your share, before rerolls</div></div>
     <div class="stat" style="align-self:end"><div class="chips">${byCls.map(([c, n]) => `<span class="cls" style="background:${c.color}"><i></i>${esc(c.name)} ${n}</span>`).join("")}</div></div>`;
 
   // pins
@@ -805,13 +864,17 @@ function renderMine() {
     buys.slice(0, 10).map(({ A, B, p, pur }) => `<tr>
       <td class="num"><span class="withpic">${pic(A, "sm")}${tag(A.id)}</span></td><td class="num"><span class="withpic">${pic(B, "sm")}${tag(B.id)}</span></td><td>${clsChip(B.c)}</td>
       <td class="r num">${p == null ? "–" : pct(p)}</td><td class="r num">${pur.toFixed(2)}</td>
-      <td class="r num">${B.eth} ETH</td>
+      <td class="r num">${priceCell(B.eth)}</td>
       <td><button class="rowbtn" type="button" data-open="${A.id}:${B.id}">Open in calculator</button></td></tr>`).join("") + "</tbody>"
     : `<tbody><tr><td class="empty">Nothing for sale can breed with your Pupkins right now.</td></tr></tbody>`;
 
   // your Pupkins
   const rank = { ok: 0, note: 1, no: 2 };
-  const list = mine.map(P => ({ P, st: statusOf(P), ps: pinStrength(P, M.pins, w) }));
+  const q = $("myFind").value.trim().toLowerCase().replace(/^#/, ""), fc = $("myCls").value, fs = $("myState").value;
+  const list = mine.map(P => ({ P, st: statusOf(P), ps: pinStrength(P, M.pins, w) })).filter(({ P, st }) =>
+    (fc === "" || P.c === +fc) && (fs === "" || st[1] === fs) &&
+    (!q || (/^\d+$/.test(q) ? String(P.id).includes(q) : P.g.some(i => partName(i).toLowerCase().includes(q)))));
+  $("myCount").textContent = list.length === mine.length ? `${mine.length} Pupkin${mine.length === 1 ? "" : "s"}` : `${list.length} of ${mine.length} shown`;
   list.sort(M.sort === "id" ? (x, y) => x.P.id - y.P.id
     : M.sort === "ready" ? (x, y) => rank[x.st[1]] - rank[y.st[1]] || (y.ps ?? 0) - (x.ps ?? 0) || x.P.id - y.P.id
     : (x, y) => (y.ps ?? 0) - (x.ps ?? 0) || rank[x.st[1]] - rank[y.st[1]] || x.P.id - y.P.id);
@@ -833,8 +896,12 @@ function renderMine() {
       <div class="bar-row"><button class="rowbtn" type="button" data-open="${P.id}:">Find a partner</button>
         <a class="portal" href="https://portal.pupkins.gg/pupkins/${P.id}" target="_blank" rel="noopener">Portal ↗</a></div>
     </article>`;
-  }).join("") : `<div class="empty">No Pupkins in these wallets in today's data.</div>`;
+  }).join("") : `<div class="empty">${mine.length ? "No Pupkins match these filters." : "No Pupkins in these wallets in today's data."}</div>`;
 }
+for (const id of ["myFind", "myCls", "myState"]) $(id).addEventListener("input", () => renderMine());
+const csvName = () => "my-pupkins-" + new Date().toISOString().slice(0, 10) + ".csv";
+$("csvSave").onclick = () => saveFile(csvName(), pupkinsCsv(myPupkins()), $("csvSave"));
+$("csvCopy").onclick = () => copyText(pupkinsCsv(myPupkins()), $("csvCopy"), $("csvBox"));
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-pin],[data-unpin],[data-unwallet],[data-example],[data-open]");
   if (!t) return;
@@ -861,6 +928,146 @@ $("mySortPins").onclick = () => setMySort("pins");
 $("mySortReady").onclick = () => setMySort("ready");
 $("mySortId").onclick = () => setMySort("id");
 
+/* ---------- shared helpers: stats, money, copy, files ---------- */
+// Per-part counts over every Pupkin (shown / carried anywhere / pure = shown + both hidden), and floors per class.
+const ST = { shown: [], carried: [], pure: [], floor: [], count: [], listed: [] };
+function buildStats() {
+  const n = PARTS.length; ST.shown = new Array(n).fill(0); ST.carried = new Array(n).fill(0); ST.pure = new Array(n).fill(0);
+  ST.floor = CLASSES.map(() => null); ST.count = CLASSES.map(() => 0); ST.listed = CLASSES.map(() => 0); ST.bred = CLASSES.map(() => 0);
+  for (const p of DATA.pupkins) {
+    ST.count[p.c]++; if (p.h > 0) ST.bred[p.c]++;
+    if (p.eth != null) { ST.listed[p.c]++; if (!ST.floor[p.c] || p.eth < ST.floor[p.c].eth) ST.floor[p.c] = p; }
+    for (let s = 0; s < 6; s++) {
+      const [d, r1, r2] = [p.g[s * 3], p.g[s * 3 + 1], p.g[s * 3 + 2]];
+      ST.shown[d]++; for (const i of new Set([d, r1, r2])) ST.carried[i]++;
+      if (d === r1 && d === r2) ST.pure[d]++;
+    }
+  }
+}
+const rarity = i => `${partName(i)} (${SLOTS[PARTS[i][0]]}, ${CLASSES[partCls(i)].name}): shows on ${fmt(ST.shown[i] || 0)} of ${fmt(DATA.pupkins.length)} Pupkins`;
+const usdOfEth = e => e != null && DATA.ethUsd ? `<span class="usd">~$${fmt(Math.round(e * DATA.ethUsd))}</span>` : "";
+const priceCell = e => e != null ? `${e} ETH ${usdOfEth(e)}` : "–";
+// Copy text; where the clipboard is blocked (e.g. inside claude.ai) show it in a box to copy by hand.
+function copyText(text, btn, box) {
+  const label = btn.textContent;
+  const done = ok => { btn.textContent = ok ? "Copied ✓" : "Copy it from the box"; setTimeout(() => { btn.textContent = label; }, 2500); };
+  const manual = () => { if (box) { box.value = text; box.hidden = false; box.focus(); box.select(); } done(false); };
+  try { navigator.clipboard.writeText(text).then(() => { if (box) box.hidden = true; done(true); }, manual); } catch (e) { manual(); }
+}
+// Save a file: on claude.ai through the downloads capability (asks the viewer), elsewhere a normal browser download.
+async function saveFile(name, text, btn) {
+  try {
+    const dl = window.claude && typeof window.claude.use === "function" ? await window.claude.use("downloads") : null;
+    if (dl) { await dl.save({ filename: name, data: text }); return; }
+  } catch (e) { if (e && e.code === "declined") return; }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob(["﻿" + text], { type: "text/csv;charset=utf-8" }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const csvCell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function pupkinsCsv(list) {
+  const head = ["Number", "Class", "Gen", "Breeds used", "Next breed $", "Status", "For sale ETH", "Owner", "Portal"];
+  for (const s of SLOTS) head.push(s + " shows", s + " hidden 1", s + " hidden 2");
+  const rows = list.map(P => {
+    const r = [P.id, CLASSES[P.c].name, P.gen, P.h, P.h < MAX_HATCH && !P.o ? parentCost(P.h) : "", statusOf(P)[0], P.eth ?? "", who(P) || addrOf(P), "https://portal.pupkins.gg/pupkins/" + P.id];
+    for (let s = 0; s < 6; s++) for (let k = 0; k < 3; k++) r.push(partName(P.g[s * 3 + k]));
+    return r;
+  });
+  return [head, ...rows].map(r => r.map(csvCell).join(",")).join("\r\n");
+}
+// Breed with P: P becomes parent A, the targets are its own look (+ `part` if given), B = best value partner for sale.
+function breedWith(id, part) {
+  const P = BYID.get(id); if (!P) return;
+  S.a = P; targetsFromA();
+  if (part != null) S.targets[PARTS[part][0]] = part;
+  S.b = bestPartner(S.a);
+  location.hash = "#a" + S.a.id + "-b" + S.b.id;
+  window.scrollTo({ top: 0 });
+}
+
+/* ---------- Market ---------- */
+const MK = { part: null, scope: "listed" };
+function renderMarket() {
+  // floors
+  const rows = CLASSES.map((c, i) => ({ c, i, f: ST.floor[i] }));
+  const all = DATA.pupkins.filter(p => p.eth != null).sort((x, y) => x.eth - y.eth)[0];
+  $("floorTable").innerHTML = `<thead><tr><th>Class</th><th>Stocks inside</th><th class="r">Pupkins</th><th class="r">For sale</th><th class="r">Have bred</th><th>Cheapest</th><th class="r">Floor</th></tr></thead><tbody>` +
+    rows.map(({ c, i, f }) => `<tr${f ? ` class="pick" data-breed="${f.id}" tabindex="0" title="Breed with ${tag(f.id)}"` : ""}>
+      <td>${clsChip(i)}</td><td class="muted">${TICKERS[i].join(" · ")}</td>
+      <td class="r num">${fmt(ST.count[i])}</td><td class="r num">${fmt(ST.listed[i])}</td><td class="r num">${fmt(ST.bred[i])}</td>
+      <td class="num">${f ? `<span class="withpic">${pic(f, "sm")}${tag(f.id)}</span>` : "–"}</td>
+      <td class="r num">${f ? priceCell(f.eth) : "–"}</td></tr>`).join("") +
+    (all ? `<tr><td><b>All</b></td><td></td><td class="r num">${fmt(DATA.pupkins.length)}</td><td class="r num">${fmt(ST.listed.reduce((a, b) => a + b, 0))}</td><td class="r num">${fmt(ST.bred.reduce((a, b) => a + b, 0))}</td><td class="num">${tag(all.id)}</td><td class="r num">${priceCell(all.eth)}</td></tr>` : "") + "</tbody>";
+
+  // part picker (built once)
+  const sel = $("pfPart");
+  if (sel.options.length < 2) {
+    sel.innerHTML = `<option value="">Choose a part…</option>` + SLOTS.map((sn, s) => `<optgroup label="${sn}">${PARTS.map((p, i) => [p, i]).filter(([p]) => p[0] === s)
+      .sort((x, y) => x[0][1] - y[0][1] || x[0][2].localeCompare(y[0][2]))
+      .map(([p, i]) => `<option value="${i}">${esc(p[2])} · ${CLASSES[p[1]].name} (shows on ${fmt(ST.shown[i])})</option>`).join("")}</optgroup>`).join("");
+  }
+  sel.value = MK.part == null ? "" : String(MK.part);
+  renderPartFinder();
+
+  // breeds-true for sale
+  const pures = DATA.pupkins.filter(p => p.eth != null && !p.o && p.h < MAX_HATCH).map(p => {
+    const slots = []; for (let s = 0; s < 6; s++) { const d = p.g[s * 3]; if (d === p.g[s * 3 + 1] && d === p.g[s * 3 + 2]) slots.push([s, d]); }
+    return { p, slots };
+  }).filter(x => x.slots.length).sort((x, y) => y.slots.length - x.slots.length || x.p.eth - y.p.eth);
+  $("pureTable").innerHTML = pures.length ? `<thead><tr><th>Pupkin</th><th>Class</th><th>Breeds true for</th><th class="r">Breeds used</th><th class="r">Price</th><th></th></tr></thead><tbody>` +
+    pures.slice(0, 40).map(({ p, slots }) => `<tr>
+      <td class="num"><span class="withpic">${pic(p, "sm")}${tag(p.id)}</span></td><td>${clsChip(p.c)}</td>
+      <td>${slots.map(([s, i]) => `<span title="${esc(rarity(i))}">${SLOTS[s]}: ${geneHtml(i)}</span>`).join("<br>")}</td>
+      <td class="r num">${p.h}/${MAX_HATCH}</td><td class="r num">${priceCell(p.eth)}</td>
+      <td><button class="rowbtn" type="button" data-breed="${p.id}">Breed with it</button></td></tr>`).join("") +
+    `</tbody><tfoot><tr><td colspan="6" class="muted" style="padding-top:8px">${pures.length > 40 ? `Showing 40 of ${fmt(pures.length)}` : fmt(pures.length) + " for sale"}, most breeds-true slots first, then cheapest.</td></tr></tfoot>`
+    : `<tbody><tr><td class="empty">No breeds-true Pupkins for sale right now.</td></tr></tbody>`;
+}
+function renderPartFinder() {
+  const i = MK.part, el = $("pfTable"), st = $("pfStats");
+  if (i == null) { st.innerHTML = ""; el.innerHTML = `<tbody><tr><td class="empty">Pick a part above.</td></tr></tbody>`; return; }
+  const s = PARTS[i][0], w = weights(), wt = w[0] + w[1] + w[2];
+  let rows = DATA.pupkins.map(p => {
+    const at = [0, 1, 2].filter(k => p.g[s * 3 + k] === i);
+    return at.length ? { p, at, pass: at.reduce((t, k) => t + w[k], 0) / wt } : null;
+  }).filter(Boolean);
+  const forSale = rows.filter(r => r.p.eth != null), cheapest = forSale.slice().sort((x, y) => x.p.eth - y.p.eth)[0];
+  st.innerHTML = `
+    <div class="stat"><div class="label">Shows it</div><div class="v">${fmt(ST.shown[i])}</div><div class="s">${pct(ST.shown[i] / DATA.pupkins.length)} of Pupkins</div></div>
+    <div class="stat"><div class="label">Carries it</div><div class="v">${fmt(ST.carried[i])}</div><div class="s">shown or hidden</div></div>
+    <div class="stat"><div class="label">Breeds true</div><div class="v">${fmt(ST.pure[i])}</div><div class="s">all three genes</div></div>
+    <div class="stat"><div class="label">For sale with it</div><div class="v">${fmt(forSale.length)}</div><div class="s">${cheapest ? "from " + cheapest.p.eth + " ETH" : "none listed"}</div></div>`;
+  if (MK.scope === "listed") rows = forSale;
+  rows.sort((x, y) => y.pass - x.pass || (x.p.eth ?? 1e9) - (y.p.eth ?? 1e9) || x.p.h - y.p.h);
+  const top = rows.slice(0, 80);
+  el.innerHTML = top.length ? `<thead><tr><th>Pupkin</th><th>Class</th><th>Where</th><th class="r">Passes it</th><th class="r">Breeds used</th><th class="r">Price</th><th>Owner</th><th></th></tr></thead><tbody>` +
+    top.map(({ p, at, pass }) => `<tr>
+      <td class="num"><span class="withpic">${pic(p, "sm")}${tag(p.id)}</span></td><td>${clsChip(p.c)}</td>
+      <td><span class="where">${["Shows", "Hidden 1", "Hidden 2"].map((n, k) => `<span class="${at.includes(k) ? "on" : ""}">${n}</span>`).join("")}</span></td>
+      <td class="r num">${Math.round(pass * 100)}%</td><td class="r num">${p.h}/${MAX_HATCH}</td>
+      <td class="r num">${priceCell(p.eth)}</td><td>${esc(who(p))}</td>
+      <td>${!p.o && p.h < MAX_HATCH ? `<button class="rowbtn" type="button" data-breed="${p.id}" data-part="${i}">Breed with it</button>` : ""}</td></tr>`).join("") +
+    `</tbody><tfoot><tr><td colspan="8" class="muted" style="padding-top:8px">Showing ${top.length} of ${fmt(rows.length)}, best at passing it on first, then cheapest. "Breed with it" opens the calculator with this part as a target.</td></tr></tfoot>`
+    : `<tbody><tr><td class="empty">No Pupkin ${MK.scope === "listed" ? "for sale " : ""}carries ${esc(partName(i))}.${MK.scope === "listed" ? " Try Everyone." : ""}</td></tr></tbody>`;
+}
+function setPfScope(sc) { MK.scope = sc; $("pfListed").setAttribute("aria-pressed", sc === "listed"); $("pfAll").setAttribute("aria-pressed", sc === "all"); renderPartFinder(); }
+$("pfListed").onclick = () => setPfScope("listed");
+$("pfAll").onclick = () => setPfScope("all");
+$("pfPart").addEventListener("change", e => { MK.part = e.target.value === "" ? null : +e.target.value; renderPartFinder(); });
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-breed]"); if (!t) return;
+  breedWith(+t.dataset.breed, t.dataset.part != null ? +t.dataset.part : null);
+});
+document.addEventListener("keydown", e => {
+  const t = e.target.closest && e.target.closest("tr[data-breed]");
+  if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); breedWith(+t.dataset.breed); }
+});
+
+/* ---------- calculator extras ---------- */
+$("swapAB").onclick = () => { [S.a, S.b] = [S.b, S.a]; targetsFromA(); renderAll(); };
+$("copyPair").onclick = () => copyText(PUBLIC_URL + "#a" + S.a.id + "-b" + S.b.id, $("copyPair"), $("pairLink"));
+
 /* ---------- views ---------- */
 function route() {
   if (!DATA) return;
@@ -872,11 +1079,14 @@ function route() {
     msg.textContent = `Added ${code.wallets.length} wallet${code.wallets.length === 1 ? "" : "s"} and ${code.pins.flat().length} pin${code.pins.flat().length === 1 ? "" : "s"} from your sync link.`;
     msg.hidden = false;
   }
-  const mine = location.hash.startsWith("#mine");
-  $("viewCalc").hidden = mine; $("viewMine").hidden = !mine;
-  $("tabCalc").setAttribute("aria-current", mine ? "false" : "page");
+  const mine = location.hash.startsWith("#mine"), market = location.hash.startsWith("#market");
+  $("viewCalc").hidden = mine || market; $("viewMine").hidden = !mine; $("viewMarket").hidden = !market;
+  $("oddsBox").hidden = market;
+  $("tabCalc").setAttribute("aria-current", mine || market ? "false" : "page");
   $("tabMine").setAttribute("aria-current", mine ? "page" : "false");
+  $("tabMarket").setAttribute("aria-current", market ? "page" : "false");
   if (mine) { renderMine(); return; }
+  if (market) { renderMarket(); return; }
   const m = /^#a(\d+)-b(\d+)$/.exec(location.hash);
   if (m && BYID.get(+m[1]) && BYID.get(+m[2]) && (S.a.id !== +m[1] || S.b.id !== +m[2])) {
     S.a = BYID.get(+m[1]); S.b = BYID.get(+m[2]); targetsFromA();
@@ -890,6 +1100,8 @@ $("oddsReset").addEventListener("click", () => { if (!$("viewMine").hidden) rend
 /* ---------- load ---------- */
 fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).then(d => {
   DATA = d; PARTS = d.parts; d.pupkins.forEach(p => BYID.set(p.id, p));
+  buildStats();
+  $("myCls").innerHTML = `<option value="">All classes</option>` + CLASSES.map((c, i) => `<option value="${i}">${c.name} · ${c.dog}</option>`).join("");
   const bred = d.pupkins.filter(p => p.h > 0).length, listed = d.pupkins.filter(p => p.eth != null).length;
   const age = new Date(d.asOf);
   $("snap").innerHTML = `<span class="pill">Snapshot ${age.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
