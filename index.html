@@ -106,6 +106,7 @@ details.odds p { margin: 10px 0 0; color: var(--muted); max-width: 70ch; }
 .opt.tgt { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .opt.tgt .name::after { content: " · target"; color: var(--accent); font-weight: 600; font-size: 11px; }
 .slot .pure { font-size: 11.5px; color: var(--muted); }
+.opt .hid { display: block; font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .finder { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; }
 .targets { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
@@ -202,12 +203,12 @@ footer p { margin: 4px 0; }
   <details class="odds" id="oddsBox">
     <summary>Inheritance odds (per parent, per part)</summary>
     <div class="row">
-      <label for="wD">Shown part (D) %<input id="wD" type="number" step="0.125" min="0" value="37.5"></label>
-      <label for="wR1">Hidden R1 %<input id="wR1" type="number" step="0.125" min="0" value="9.375"></label>
-      <label for="wR2">Hidden R2 %<input id="wR2" type="number" step="0.125" min="0" value="3.125"></label>
-      <button class="btn" id="oddsReset" type="button">Axie defaults</button>
+      <label for="wD">Shown part (D) %<input id="wD" type="number" step="0.1" min="0" value="37.5"></label>
+      <label for="wR1">Hidden R1 %<input id="wR1" type="number" step="0.1" min="0" value="9.4"></label>
+      <label for="wR2">Hidden R2 %<input id="wR2" type="number" step="0.1" min="0" value="3.1"></label>
+      <button class="btn" id="oddsReset" type="button">Wiki defaults</button>
     </div>
-    <p>Pupkins hasn't published its odds. These defaults are Axie's: each part comes from one parent's D, R1 or R2 at 37.5 / 9.375 / 3.125%, and the class is a 50/50 pick. If you enter other numbers, they're scaled so each parent counts for half.</p>
+    <p>These are the odds the <a href="https://portal.pupkins.gg/wiki/breeding" target="_blank" rel="noopener">Pupkins breeding wiki</a> gives: each part comes from one parent's shown gene, hidden 1 or hidden 2 at 37.5 / 9.4 / 3.1%, so each parent gives 50%. The newborn's hidden genes are drawn the same way from what's left. If you enter other numbers, they're scaled so each parent counts for half.</p>
   </details>
 
   <div class="view" id="viewCalc">
@@ -226,10 +227,12 @@ footer p { margin: 4px 0; }
       <div class="stat"><div class="label">Child</div><h2 id="childH">Possible child</h2></div>
       <div class="stat" style="flex:1;min-width:220px"><div class="label">Class</div><div class="classbar" id="classbar"></div></div>
       <div class="stat"><div class="label">Shows every target</div><div class="v" id="tgtP">–</div><div class="s" id="tgtS"></div></div>
+      <div class="stat"><div class="label">Within 5 rerolls</div><div class="v" id="tgtR">–</div><div class="s">best of 6 rolls, you keep the one you stop on</div></div>
       <div class="stat"><div class="label">Expected purity</div><div class="v" id="purity">–</div><div class="s">of 6 parts</div></div>
+      <div class="stat"><div class="label">Newborn</div><div class="v" id="childGen">–</div><div class="s" id="backing"></div></div>
     </div>
     <div class="slots" id="slots"></div>
-    <p class="muted" style="margin:0">Click a part to make it a target (click again to clear). "Pure gene" is the chance all three of the child's genes in that slot are the target part, so it breeds true.</p>
+    <p class="muted" style="margin:0">Click a part to make it a target (click again to clear). The % is the chance the newborn shows it; "hidden" is the chance it carries it as hidden 1 / hidden 2 (which it can pass on later). "Pure gene" is the chance all three of the newborn's genes in that slot are the target part, so it breeds true. Each reroll redraws all six parts with the same odds; the class never changes.</p>
   </section>
 
   <section class="finder" aria-labelledby="findH">
@@ -303,7 +306,7 @@ footer p { margin: 4px 0; }
   </div>
 
   <footer>
-    <p>The rules come from the portal's own code: 7 hatches max, no breeding with a parent, child or sibling, Origins can't breed, and each parent pays SCHIFFY by how many times it has hatched (900, 1,350, 2,250, 3,600, 5,850, 9,450, 15,300).</p>
+    <p>Rules, prices and odds come from the <a href="https://portal.pupkins.gg/wiki/breeding" target="_blank" rel="noopener">Pupkins breeding wiki</a> (as of 24 Nov 2026): 8 breeds per Pupkin at $7, $12 … $42 per parent (paid in ETH), no wait between breeds, no breeding with its parent, child or a brother or sister, starter Pupkins can't breed. Same-class parents always give that class, mixed classes 50/50. Eggs crack free after 4 days, then up to 5 rerolls at 10% of the pair price, each 20% more than the last.</p>
     <p>The data is a snapshot of the Pupkins portal's market and goes out of date as people trade. Check the price on the portal before you buy. This page only reads data and never touches a wallet.</p>
   </footer>
 </div>
@@ -318,9 +321,12 @@ const CLASSES = [
   { name: "Hunter", dog: "Chihuahua", color: "#74D12F" },
 ];
 const SLOTS = ["Face", "Ears", "Hand", "Head", "Back", "Tail"];
-const COST = [900, 1350, 2250, 3600, 5850, 9450, 15300];
-const MAX_HATCH = 7;
-const DEFAULT_W = [37.5, 9.375, 3.125];
+// From the Pupkins breeding wiki (portal.pupkins.gg/wiki/breeding, as of 24 Nov 2026).
+const MAX_HATCH = 8;                       // breeds per Pupkin
+const DEFAULT_W = [37.5, 9.4, 3.1];    // per parent, per part: shows / hidden 1 / hidden 2
+const REROLLS = 5;                         // rerolls per egg, after the free crack
+const BACKING_USD = 10.4;                  // each newborn: ~$5.20 in one of its class's 3 stocks + ~$5.20 SCHIFFY
+const TICKERS = [["SPY", "QQQ", "SGOV"], ["AAPL", "AMZN", "MSFT"], ["GLD", "SLV", "USO"], ["MSTR", "COIN", "CRCL"], ["NVDA", "MU", "GOOGL"], ["SPCX", "TSLA", "PLTR"]];
 
 let DATA = null, BYID = new Map(), PARTS = [];
 const S = { a: null, b: null, targets: [null, null, null, null, null, null], scope: "listed", sort: "value", w: DEFAULT_W.slice() };
@@ -331,7 +337,10 @@ const tag = id => "#" + String(id).padStart(4, "0");
 const pct = p => p >= 0.9995 ? "100%" : p >= 0.1 ? (p * 100).toFixed(1) + "%" : p >= 0.001 ? (p * 100).toFixed(2) + "%" : p > 0 ? (p * 100).toFixed(3) + "%" : "0%";
 const oneIn = p => p > 0 ? "about 1 in " + (1 / p < 10 ? (1 / p).toFixed(1) : Math.round(1 / p).toLocaleString()) : "can't happen";
 const fmt = n => n.toLocaleString();
-const parentCost = h => COST[Math.min(h, MAX_HATCH - 1)];
+const parentCost = h => 7 + 5 * Math.min(h, MAX_HATCH - 1);   // USD: breed n costs $7 + $5 × (n − 1); h = breeds used
+const usd = n => "$" + (Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 });
+const toEth = d => DATA && DATA.ethUsd ? d / DATA.ethUsd : null;
+const ethTxt = e => e == null ? "" : e < 0.01 ? e.toFixed(5) : e < 1 ? e.toFixed(4) : e.toFixed(3);
 const partName = i => PARTS[i][2];
 const partCls = i => PARTS[i][1];
 
@@ -377,6 +386,32 @@ function pinStrength(P, pins, w) {
   }
   return n ? t / n : null;
 }
+// The newborn's own three genes in one slot. The wiki's model: the 6 parent genes (3 each, a repeated part counts
+// twice) are drawn one after another without putting back, by weight: 1st = shows, 2nd = hidden 1, 3rd = hidden 2.
+// Returns { genes: Map(part -> [pShows, pHidden1, pHidden2]), pure: Map(part -> chance all three are that part) }.
+function childGenes(A, B, s, w) {
+  const e = []; for (const p of [A, B]) for (let k = 0; k < 3; k++) e.push([p.g[s * 3 + k], w[k]]);
+  const tot = e.reduce((t, x) => t + x[1], 0), genes = new Map(), pure = new Map();
+  const add = (i, k, p) => { if (!genes.has(i)) genes.set(i, [0, 0, 0]); genes.get(i)[k] += p; };
+  for (let a = 0; a < 6; a++) {
+    const pa = e[a][1] / tot; if (!pa) continue; add(e[a][0], 0, pa);
+    const r1 = tot - e[a][1];
+    for (let b = 0; b < 6; b++) if (b !== a) {
+      const pb = r1 > 0 ? pa * e[b][1] / r1 : 0; if (!pb) continue; add(e[b][0], 1, pb);
+      const r2 = r1 - e[b][1];
+      for (let c = 0; c < 6; c++) if (c !== a && c !== b) {
+        const pc = r2 > 0 ? pb * e[c][1] / r2 : 0; if (!pc) continue; add(e[c][0], 2, pc);
+        if (e[a][0] === e[b][0] && e[b][0] === e[c][0]) pure.set(e[a][0], (pure.get(e[a][0]) || 0) + pc);
+      }
+    }
+  }
+  return { genes, pure };
+}
+// Chance at least one of `rolls` tries (the free first roll + rerolls) hits a chance p.
+const withRolls = (p, rolls = REROLLS + 1) => 1 - (1 - p) ** rolls;
+// Reroll r (1..5) costs pair × 10% × 1.2^(r−1), rounded to the cent.
+const rerollCost = (pair, r) => Math.round(pair * 0.1 * 1.2 ** (r - 1) * 100) / 100;
+const childGen = (A, B) => Math.max(A.gen, B.gen) + 1;
 function classOdds(A, B) {
   const m = new Map(); m.set(A.c, 0.5); m.set(B.c, (m.get(B.c) || 0) + 0.5); return m;
 }
@@ -387,18 +422,19 @@ function expPurity(A, B, w) {
     for (const [i, p] of slotDist(A, B, s, w)) if (partCls(i) === c) e += pc * p;
   return e;
 }
-// Blocking rules, same as the portal's (self, family, origin, sterile); resting and listed are notes.
-function checks(A, B, now = Date.now()) {
+// Blocking rules from the wiki (self, parent/child, siblings sharing a parent, starter Pupkins, breeds left).
+// No wait between breeds. You must own both: someone else's or a listed one is a note.
+function checks(A, B) {
   const out = [];
   const fam = (x, y) => (x.par || []).includes(y.id);
   out.push({ ok: A.id !== B.id, label: "Two different Pupkins" });
   out.push({ ok: !fam(A, B) && !fam(B, A), label: "Not parent and child" });
-  out.push({ ok: !(A.par && B.par && A.par.some(p => B.par.includes(p))), label: "Not siblings" });
-  out.push({ ok: !A.o && !B.o, label: "Neither is an Origin" });
-  out.push({ ok: A.h < MAX_HATCH && B.h < MAX_HATCH, label: "Hatches left" });
+  out.push({ ok: !(A.par && B.par && A.par.some(p => B.par.includes(p))), label: "Not brother or sister" });
+  out.push({ ok: !A.o && !B.o, label: "Neither is a starter Pupkin" });
+  out.push({ ok: A.h < MAX_HATCH && B.h < MAX_HATCH, label: "Breeds left" });
+  if (A.w !== B.w) out.push({ note: true, label: "Different owners: you need both (two linked wallets are fine)" });
   for (const p of [A, B]) {
-    if (p.cd && Date.parse(p.cd) > now) out.push({ note: true, label: tag(p.id) + " rests until " + new Date(p.cd).toLocaleString() });
-    if (p.st === "listed") out.push({ note: true, label: tag(p.id) + " is for sale: buy it (or unlist it) first" });
+    if (p.st === "listed") out.push({ note: true, label: tag(p.id) + " is for sale: buy it first" });
     if (p.st === "lent" || p.st === "borrowed") out.push({ note: true, label: tag(p.id) + " is " + p.st });
   }
   return out;
@@ -436,8 +472,8 @@ function renderCard(which) {
     <div class="pupTop">${pic(P, "lg")}
     <div class="facts">
       <span class="pill">Gen <span class="num">${P.gen}</span></span>
-      <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
-      <span class="pill">Next hatch <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>
+      <span class="pill">Breeds used <span class="num">${P.h}/${MAX_HATCH}</span></span>
+      ${P.h < MAX_HATCH ? `<span class="pill">Next breed <span class="num">${usd(parentCost(P.h))}</span></span>` : ""}
       ${price}
       ${P.one ? `<span class="pill warn">1 of 1 · ${esc(P.one)}</span>` : ""}
       ${who(P) ? `<span class="pill">Owner ${esc(who(P))}</span>` : ""}
@@ -454,9 +490,12 @@ function renderRules() {
   const cs = checks(A, B);
   const total = parentCost(A.h) + parentCost(B.h);
   const buy = [A, B].filter(p => p.eth != null).reduce((t, p) => t + p.eth, 0);
+  const rr = Array.from({ length: REROLLS }, (_, r) => rerollCost(total, r + 1)), rrAll = rr.reduce((t, x) => t + x, 0);
+  const e = toEth(total);
   el.innerHTML = cs.map(c => `<span class="rule ${c.note ? "note" : c.ok ? "ok" : "no"}">${esc(c.label)}</span>`).join("") +
-    `<div class="cost"><div class="label">This hatch costs</div><div class="big">${fmt(total)} SCHIFFY</div>
-     <div class="muted" style="font-size:12px">${fmt(parentCost(A.h))} + ${fmt(parentCost(B.h))}${buy ? ` · buying both listed: ${+buy.toFixed(4)} ETH (~$${fmt(Math.round(buy * DATA.ethUsd))})` : ""}</div></div>`;
+    `<div class="cost"><div class="label">This breed costs</div><div class="big">${usd(total)}</div>
+     <div class="muted" style="font-size:12px">${usd(parentCost(A.h))} + ${usd(parentCost(B.h))}, paid in ETH${e != null ? ` (about ${ethTxt(e)} ETH today)` : ""}${buy ? ` · buying the listed one${[A, B].filter(p => p.eth != null).length > 1 ? "s" : ""}: ${+buy.toFixed(4)} ETH (~$${fmt(Math.round(buy * DATA.ethUsd))})` : ""}</div>
+     <div class="muted" style="font-size:12px;margin-top:4px">Crack free after 4 days · rerolls ${rr.map(usd).join(", ")} (all ${REROLLS}: ${usd(rrAll)}) · hatching is free</div></div>`;
 }
 function renderChild() {
   const A = S.a, B = S.b, w = weights();
@@ -465,19 +504,23 @@ function renderChild() {
     `<span style="width:${p * 100}%;background:${CLASSES[c].color}">${esc(CLASSES[c].name)} ${Math.round(p * 100)}%</span>`).join("");
   const tp = targetP(A, B, S.targets, w), anyT = S.targets.some(t => t != null);
   $("tgtP").textContent = anyT ? pct(tp) : "–";
-  $("tgtS").textContent = anyT ? oneIn(tp) + " hatches" : "set a target below";
+  $("tgtS").textContent = anyT ? oneIn(tp) + " rolls" : "set a target below";
+  $("tgtR").textContent = anyT ? pct(withRolls(tp)) : "–";
   $("purity").textContent = expPurity(A, B, w).toFixed(2);
+  $("childGen").textContent = "Gen " + childGen(A, B);
+  const cls = [...classOdds(A, B).keys()];
+  $("backing").textContent = `hatches with ~${usd(BACKING_USD)}: ~${usd(BACKING_USD / 2)} in ${cls.map(c => TICKERS[c].join("/")).join(" or ")} (1 in 3 each) + ~${usd(BACKING_USD / 2)} SCHIFFY`;
   $("slots").innerHTML = SLOTS.map((n, s) => {
-    const d = slotDist(A, B, s, w), t = S.targets[s];
+    const d = slotDist(A, B, s, w), t = S.targets[s], cg = childGenes(A, B, s, w);
     const pt = t != null ? slotP(A, B, s, t, w) : null;
     const opts = d.map(([i, p]) => {
-      const c = CLASSES[partCls(i)];
-      return `<button type="button" class="opt${t === i ? " tgt" : ""}" data-s="${s}" data-i="${i}" aria-pressed="${t === i}">
+      const c = CLASSES[partCls(i)], g = cg.genes.get(i) || [0, 0, 0];
+      return `<button type="button" class="opt${t === i ? " tgt" : ""}" data-s="${s}" data-i="${i}" aria-pressed="${t === i}" title="Shows ${pct(g[0])} · hidden 1 ${pct(g[1])} · hidden 2 ${pct(g[2])}">
         <span class="bar" style="width:${p * 100}%;background:${c.color}"></span>
-        <span class="name">${geneHtml(i)}</span><span class="num">${pct(p)}</span></button>`;
+        <span class="name">${geneHtml(i)}<small class="hid">hidden ${pct(g[1])} / ${pct(g[2])}</small></span><span class="num">${pct(p)}</span></button>`;
     }).join("");
     return `<div class="slot"><div class="t"><h3>${n}</h3>${t != null ? `<span class="label">target ${pct(pt)}</span>` : ""}</div>${opts}
-      ${t != null ? `<div class="pure">Pure gene (D, R1 and R2 all ${esc(partName(t))}): ${pct(pt ** 3)}</div>` : ""}</div>`;
+      ${t != null ? `<div class="pure">Pure gene (shows, hidden 1 and hidden 2 all ${esc(partName(t))}): ${pct(cg.pure.get(t) || 0)}</div>` : ""}</div>`;
   }).join("");
 }
 function renderTargets() {
@@ -496,18 +539,19 @@ function renderFinder() {
   if (!A) { el.innerHTML = ""; return; }
   const w = weights(), anyT = S.targets.some(t => t != null);
   let rows = DATA.pupkins.filter(B => B.id !== A.id && (S.scope === "all" || B.eth != null) && canPair(A, B));
-  rows = rows.map(B => { const p = anyT ? targetP(A, B, S.targets, w) : 1; return { B, p, pur: expPurity(A, B, w), v: B.eth ? p / B.eth : -1 }; });
+  // value = target odds per ETH spent: the partner's price plus this breed's cost
+  rows = rows.map(B => { const p = anyT ? targetP(A, B, S.targets, w) : 1; return { B, p, pur: expPurity(A, B, w), v: B.eth ? p / (B.eth + (toEth(parentCost(A.h) + parentCost(B.h)) || 0)) : -1 }; });
   const byOdds = (x, y) => y.p - x.p || y.pur - x.pur || (x.B.eth ?? 1e9) - (y.B.eth ?? 1e9) || x.B.h - y.B.h;
   rows.sort(S.sort === "value" ? (x, y) => y.v - x.v || byOdds(x, y) : byOdds);
   const top = rows.slice(0, 60);
   if (!top.length) { el.innerHTML = `<tbody><tr><td class="empty">No Pupkin ${S.scope === "listed" ? "for sale " : ""}can breed with ${tag(A.id)} right now.${S.scope === "listed" ? " Try Everyone." : ""}</td></tr></tbody>`; return; }
-  el.innerHTML = `<thead><tr><th>Partner</th><th>Class</th><th class="r">Shows every target</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th class="r">Price</th><th>Owner</th></tr></thead><tbody>` +
+  el.innerHTML = `<thead><tr><th>Partner</th><th>Class</th><th class="r">Shows every target</th><th class="r">Expected purity</th><th class="r">Breed cost</th><th class="r">Price</th><th>Owner</th></tr></thead><tbody>` +
     top.map(({ B, p, pur }) => `<tr class="pick" data-id="${B.id}" tabindex="0" title="Use as parent B">
       <td class="num"><span class="withpic">${pic(B, "sm")}${tag(B.id)}</span>${B.one ? ` <span class="pill warn">1 of 1</span>` : ""}</td>
       <td>${clsChip(B.c)}</td>
       <td class="r num">${anyT ? pct(p) : "–"}</td>
       <td class="r num">${pur.toFixed(2)}</td>
-      <td class="r num">${fmt(parentCost(A.h) + parentCost(B.h))}</td>
+      <td class="r num">${usd(parentCost(A.h) + parentCost(B.h))}</td>
       <td class="r num">${B.eth != null ? B.eth + " ETH" : "–"}</td>
       <td>${esc(who(B))}</td></tr>`).join("") +
     `</tbody><tfoot><tr><td colspan="7" class="muted" style="padding-top:8px">Showing ${top.length} of ${fmt(rows.length)} Pupkins that can breed with ${tag(A.id)}${S.sort === "value" ? ", most target odds per ETH first (not for sale go last)" : ", best target odds first"}. Click a row to use it as parent B.</td></tr></tfoot>`;
@@ -533,7 +577,7 @@ function bestPartner(A) {
   let best = null, bp = -1;
   for (const B of DATA.pupkins) {
     if (B.id === A.id || B.eth == null || !canPair(A, B)) continue;
-    const p = targetP(A, B, S.targets, w) / B.eth;   // best target odds per ETH
+    const p = targetP(A, B, S.targets, w) / (B.eth + (toEth(parentCost(A.h) + parentCost(B.h)) || 0));   // best target odds per ETH (price + breed cost)
     if (p > bp) { bp = p; best = B; }
   }
   return best || DATA.pupkins.find(B => B.id !== A.id);
@@ -561,7 +605,7 @@ $("scopeAll").onclick = () => setScope("all");
 $("tgtFromA").onclick = () => { targetsFromA(); renderAll(); };
 $("tgtClear").onclick = () => { S.targets = [null, null, null, null, null, null]; renderAll(); };
 for (const [k, id] of [[0, "wD"], [1, "wR1"], [2, "wR2"]]) $(id).addEventListener("input", () => { S.w[k] = Math.max(0, parseFloat($(id).value) || 0); renderChild(); renderFinder(); });
-$("oddsReset").onclick = () => { S.w = DEFAULT_W.slice(); $("wD").value = 37.5; $("wR1").value = 9.375; $("wR2").value = 3.125; renderChild(); renderFinder(); };
+$("oddsReset").onclick = () => { S.w = DEFAULT_W.slice(); $("wD").value = 37.5; $("wR1").value = 9.4; $("wR2").value = 3.1; renderChild(); renderFinder(); };
 
 /* ---------- My Pupkins ---------- */
 const M = { wallets: [], pins: [[], [], [], [], [], []], sort: "pins" };
@@ -647,9 +691,8 @@ function readSyncCode(hash) {
 }
 function myPupkins() { const set = new Set(M.wallets); return DATA.pupkins.filter(p => set.has(addrOf(p))); }
 function statusOf(p, now = Date.now()) {
-  if (p.o) return ["Origin, can't breed", "no"];
-  if (p.h >= MAX_HATCH) return ["Sterile", "no"];
-  if (p.cd && Date.parse(p.cd) > now) return ["Resting until " + new Date(p.cd).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }), "note"];
+  if (p.o) return ["Starter Pupkin, can't breed", "no"];
+  if (p.h >= MAX_HATCH) return ["All 8 breeds used", "no"];
   if (p.st === "listed") return ["For sale at " + p.eth + " ETH", "note"];
   if (p.st === "lent" || p.st === "borrowed") return [p.st === "lent" ? "Lent out" : "Borrowed", "note"];
   return ["Ready to breed", "ok"];
@@ -709,7 +752,7 @@ function renderMine() {
   $("mySum").innerHTML = `
     <div class="stat"><div class="label">Pupkins</div><div class="v">${mine.length}</div></div>
     <div class="stat"><div class="label">Ready to breed</div><div class="v">${ready}</div></div>
-    <div class="stat"><div class="label">Hatches left</div><div class="v">${left}</div></div>
+    <div class="stat"><div class="label">Breeds left</div><div class="v">${left}</div></div>
     <div class="stat" style="align-self:end"><div class="chips">${byCls.map(([c, n]) => `<span class="cls" style="background:${c.color}"><i></i>${esc(c.name)} ${n}</span>`).join("")}</div></div>`;
 
   // pins
@@ -732,16 +775,16 @@ function renderMine() {
   pairs.sort((x, y) => (pinsOn ? y.p - x.p : 0) || y.pur - x.pur || x.cost - y.cost || x.A.id - y.A.id);
   $("sugNote").textContent = pairs.length ? `${fmt(pairs.length)} possible pair${pairs.length === 1 ? "" : "s"}${pinsOn ? ", best pinned-trait odds first" : ", most pure first. Pin traits to rank by them"}` : "";
   const stateCell = (A, B) => { const ns = [A, B].map(statusOf).filter(s => s[1] !== "ok"); return ns.length ? `<span class="state note">${ns.map(s => esc(s[0])).join("; ")}</span>` : `<span class="state ok">Both ready</span>`; };
-  $("sugTable").innerHTML = pairs.length ? `<thead><tr><th>Pair</th><th>Classes</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Hatch cost</th><th>Status</th><th></th></tr></thead><tbody>` +
+  $("sugTable").innerHTML = pairs.length ? `<thead><tr><th>Pair</th><th>Classes</th><th class="r">Shows every pin</th><th class="r">Expected purity</th><th class="r">Breed cost</th><th>Status</th><th></th></tr></thead><tbody>` +
     pairs.slice(0, 15).map(({ A, B, p, pur, cost }) => `<tr>
       <td class="num"><span class="withpic">${pic(A, "sm")}${tag(A.id)} + ${pic(B, "sm")}${tag(B.id)}</span></td>
       <td>${clsChip(A.c)}${A.c !== B.c ? " " + clsChip(B.c) : ""}</td>
       <td class="r num">${p == null ? "–" : pct(p)}</td>
       <td class="r num">${pur.toFixed(2)}</td>
-      <td class="r num">${fmt(cost)}</td>
+      <td class="r num">${usd(cost)}</td>
       <td>${stateCell(A, B)}</td>
       <td><button class="rowbtn" type="button" data-open="${A.id}:${B.id}">Open in calculator</button></td></tr>`).join("") + "</tbody>"
-    : `<tbody><tr><td class="empty">${breedable.length < 2 ? "You need at least two Pupkins with hatches left to breed them together." : "None of your Pupkins can breed with each other (family, Origins or no hatches left)."}</td></tr></tbody>`;
+    : `<tbody><tr><td class="empty">${breedable.length < 2 ? "You need at least two Pupkins with breeds left to breed them together." : "None of your Pupkins can breed with each other (family, starter Pupkins or no breeds left)."}</td></tr></tbody>`;
 
   // partners to buy
   const mineSet = new Set(mine.map(p => p.id));
@@ -781,8 +824,8 @@ function renderMine() {
       <span class="state ${st[1]}">${esc(st[0])}</span>
       <div class="facts">
         <span class="pill">Gen <span class="num">${P.gen}</span></span>
-        <span class="pill">Hatches <span class="num">${P.h}/${MAX_HATCH}</span></span>
-        ${P.h < MAX_HATCH && !P.o ? `<span class="pill">Next <span class="num">${fmt(parentCost(P.h))}</span> SCHIFFY</span>` : ""}
+        <span class="pill">Breeds <span class="num">${P.h}/${MAX_HATCH}</span></span>
+        ${P.h < MAX_HATCH && !P.o ? `<span class="pill">Next <span class="num">${usd(parentCost(P.h))}</span></span>` : ""}
       </div></div></div>
       ${ps != null ? `<div class="strength"><div class="label">Passes pinned parts ${Math.round(ps * 100)}%</div><div class="meter"><i style="width:${ps * 100}%"></i></div></div>` : ""}
       ${trueSlots.length ? `<div class="true">Breeds true for pinned ${trueSlots.join(", ")}</div>` : ""}
@@ -851,7 +894,7 @@ fetch("pupkins.json").then(r => { if (!r.ok) throw new Error(r.status); return r
   const age = new Date(d.asOf);
   $("snap").innerHTML = `<span class="pill">Snapshot ${age.toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</span>
     <span class="pill"><span class="num">${fmt(d.pupkins.length)}</span> Pupkins · <span class="num">${listed}</span> for sale</span>
-    <span class="pill${bred ? "" : " warn"}">${bred ? fmt(bred) + " have bred" : "No hatches yet"}</span>`;
+    <span class="pill${bred ? "" : " warn"}">${bred ? fmt(bred) + " have bred" : "No breeds yet"}</span>`;
   const dl = document.createElement("datalist"); dl.id = "ids";
   dl.innerHTML = d.pupkins.map(p => `<option value="${p.id}">${CLASSES[p.c].name}${p.eth != null ? " · " + p.eth + " ETH" : ""}</option>`).join("");
   document.body.appendChild(dl);
